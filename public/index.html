@@ -23,6 +23,13 @@
   tryNext();
 })();
 </script>
+<!-- PDF.js (client-side PDF text extraction — no AI, no server) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if(window['pdfjsLib']){
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 :root{
@@ -78,10 +85,14 @@ input[type="file"]{display:none;}
 .upload-zone{border:2px dashed var(--slate-light);border-radius:var(--radius);padding:12px 10px;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--slate-faint);user-select:none;min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .upload-zone:hover{border-color:var(--teal);background:var(--teal-faint);}
 .upload-zone.has-file{border-color:var(--green);background:var(--green-faint);border-style:solid;}
+.upload-zone.drag-over{border-color:var(--teal);background:var(--teal-faint);border-style:solid;}
 .upload-zone-icon{font-size:16px;margin-bottom:3px;}
 .upload-zone-text{font-size:11px;color:var(--slate);line-height:1.4;}
 .upload-zone-text strong{color:var(--teal);}
-.upload-fname{font-size:10.5px;color:var(--green);font-weight:600;margin-top:4px;word-break:break-all;}
+.upload-fname{font-size:10.5px;color:var(--green);font-weight:600;margin-top:4px;word-break:break-all;text-align:left;width:100%;}
+.upload-fname-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:2px 0;}
+.upload-fname-remove{color:var(--red);cursor:pointer;font-weight:700;flex-shrink:0;padding:0 3px;}
+.upload-fname-remove:hover{text-decoration:underline;}
 .paste-side-label{font-size:11px;font-weight:500;color:var(--text-soft);margin-bottom:4px;display:block;}
 .paste-side textarea{min-height:92px;font-size:12px;resize:vertical;margin-top:0;}
 /* BUTTONS */
@@ -424,10 +435,10 @@ tr:hover td{background:var(--slate-faint);}
               <div>
                 <div class="upload-zone" id="z-md" onclick="document.getElementById('f-md').click()">
                   <div class="upload-zone-icon">📎</div>
-                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-zone-text"><strong>Upload PDFs</strong><br>or drag &amp; drop (multiple ok)</div>
                   <div class="upload-fname" id="fn-md"></div>
                 </div>
-                <input type="file" id="f-md" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-md','fn-md','z-md','fc-md','badge-physician')">
+                <input type="file" id="f-md" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-md','fn-md','z-md','fc-md','badge-physician')">
                 <input type="hidden" id="fc-md">
               </div>
               <div class="paste-side">
@@ -451,10 +462,10 @@ tr:hover td{background:var(--slate-faint);}
               <div>
                 <div class="upload-zone" id="z-nurse" onclick="document.getElementById('f-nurse').click()">
                   <div class="upload-zone-icon">📎</div>
-                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-zone-text"><strong>Upload PDFs</strong><br>or drag &amp; drop (multiple ok)</div>
                   <div class="upload-fname" id="fn-nurse"></div>
                 </div>
-                <input type="file" id="f-nurse" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-nurse','fn-nurse','z-nurse','fc-nurse','badge-nurse')">
+                <input type="file" id="f-nurse" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-nurse','fn-nurse','z-nurse','fc-nurse','badge-nurse')">
                 <input type="hidden" id="fc-nurse">
               </div>
               <div class="paste-side">
@@ -478,10 +489,10 @@ tr:hover td{background:var(--slate-faint);}
               <div>
                 <div class="upload-zone" id="z-pt" onclick="document.getElementById('f-pt').click()">
                   <div class="upload-zone-icon">📎</div>
-                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-zone-text"><strong>Upload PDFs</strong><br>or drag &amp; drop (multiple ok)</div>
                   <div class="upload-fname" id="fn-pt"></div>
                 </div>
-                <input type="file" id="f-pt" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-pt','fn-pt','z-pt','fc-pt','badge-pt')">
+                <input type="file" id="f-pt" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-pt','fn-pt','z-pt','fc-pt','badge-pt')">
                 <input type="hidden" id="fc-pt">
               </div>
               <div class="paste-side">
@@ -505,10 +516,10 @@ tr:hover td{background:var(--slate-faint);}
               <div>
                 <div class="upload-zone" id="z-ot" onclick="document.getElementById('f-ot').click()">
                   <div class="upload-zone-icon">📎</div>
-                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-zone-text"><strong>Upload PDFs</strong><br>or drag &amp; drop (multiple ok)</div>
                   <div class="upload-fname" id="fn-ot"></div>
                 </div>
-                <input type="file" id="f-ot" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-ot','fn-ot','z-ot','fc-ot','badge-ot')">
+                <input type="file" id="f-ot" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-ot','fn-ot','z-ot','fc-ot','badge-ot')">
                 <input type="hidden" id="fc-ot">
               </div>
               <div class="paste-side">
@@ -532,10 +543,10 @@ tr:hover td{background:var(--slate-faint);}
               <div>
                 <div class="upload-zone" id="z-slp" onclick="document.getElementById('f-slp').click()">
                   <div class="upload-zone-icon">📎</div>
-                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-zone-text"><strong>Upload PDFs</strong><br>or drag &amp; drop (multiple ok)</div>
                   <div class="upload-fname" id="fn-slp"></div>
                 </div>
-                <input type="file" id="f-slp" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-slp','fn-slp','z-slp','fc-slp','badge-slp')">
+                <input type="file" id="f-slp" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-slp','fn-slp','z-slp','fc-slp','badge-slp')">
                 <input type="hidden" id="fc-slp">
               </div>
               <div class="paste-side">
@@ -673,16 +684,16 @@ tr:hover td{background:var(--slate-faint);}
           <select id="a-denial-type"><option value="">Select...</option><option value="not_medically_necessary">Not medically necessary</option><option value="experimental">Experimental / investigational</option><option value="missing_docs">Insufficient documentation</option><option value="level_of_care">Inappropriate level of care</option><option value="no_improvement">No expected functional improvement</option><option value="conservative_tx">Conservative treatment not exhausted</option><option value="other">Other</option></select>
           <label>Denial Letter Text</label><textarea id="a-denial-text" placeholder="Paste the denial letter text or key excerpts..." style="min-height:110px;"></textarea>
           <label style="margin-top:14px;">Upload Denial Letter (PDF or TXT)</label>
-          <div class="upload-zone" id="z-denial" onclick="document.getElementById('f-denial').click()"><div class="upload-zone-icon">📎</div><div class="upload-zone-text"><strong>Click to upload</strong> denial letter</div><div class="upload-fname" id="fn-denial"></div></div>
-          <input type="file" id="f-denial" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-denial','fn-denial','z-denial','fc-denial',null)">
+          <div class="upload-zone" id="z-denial" onclick="document.getElementById('f-denial').click()"><div class="upload-zone-icon">📎</div><div class="upload-zone-text"><strong>Click to upload</strong> or drag &amp; drop (multiple ok)</div><div class="upload-fname" id="fn-denial"></div></div>
+          <input type="file" id="f-denial" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-denial','fn-denial','z-denial','fc-denial',null)">
           <input type="hidden" id="fc-denial">
         </div>
         <div class="card">
           <div class="card-title">📄 Supporting Clinical Documentation</div>
           <textarea id="a-clinical" placeholder="Paste physician note, SOAP note, or clinical documentation..." style="min-height:110px;"></textarea>
           <label style="margin-top:14px;">Upload Clinical Docs (PDF or TXT)</label>
-          <div class="upload-zone" id="z-aclinical" onclick="document.getElementById('f-aclinical').click()"><div class="upload-zone-icon">📎</div><div class="upload-zone-text"><strong>Click to upload</strong> clinical documentation</div><div class="upload-fname" id="fn-aclinical"></div></div>
-          <input type="file" id="f-aclinical" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-aclinical','fn-aclinical','z-aclinical','fc-aclinical',null)">
+          <div class="upload-zone" id="z-aclinical" onclick="document.getElementById('f-aclinical').click()"><div class="upload-zone-icon">📎</div><div class="upload-zone-text"><strong>Click to upload</strong> or drag &amp; drop (multiple ok)</div><div class="upload-fname" id="fn-aclinical"></div></div>
+          <input type="file" id="f-aclinical" multiple accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-aclinical','fn-aclinical','z-aclinical','fc-aclinical',null)">
           <input type="hidden" id="fc-aclinical">
           <label>Attending Physician</label><input type="text" id="a-md" placeholder="Dr. Name, MD — Specialty">
         </div>
@@ -821,31 +832,114 @@ function combineDoc(fileId,pasteId){
   return parts.filter(Boolean).join('\n');
 }
 
-/* ── FILE UPLOAD ── */
-function handleUpload(inputId,nameId,zoneId,contentId,badgeId){
-  var inp=document.getElementById(inputId);
-  if(!inp||!inp.files||!inp.files[0]) return;
-  var file=inp.files[0];
-  document.getElementById(nameId).textContent='✓ '+file.name;
-  document.getElementById(zoneId).classList.add('has-file');
-  if(badgeId){var b=document.getElementById(badgeId);if(b){b.textContent='✓ Added';b.classList.add('filled');}}
-  var isTxt=file.type==='text/plain'||file.name.toLowerCase().endsWith('.txt');
-  if(isTxt){
-    var r=new FileReader();
-    r.onload=function(e){document.getElementById(contentId).value=e.target.result;toast(file.name+' loaded');};
-    r.onerror=function(){toast('Could not read file','❌');};
-    r.readAsText(file);
-  } else {
-    document.getElementById(contentId).value='[Attached: '+file.name+' ('+(file.size/1024).toFixed(1)+' KB) — paste text below for AI extraction]';
-    toast(file.name+' attached — paste text below for AI extraction');
+/* ── FILE UPLOAD (multi-file, drag & drop, client-side PDF text extraction) ── */
+var zoneFiles={}; // contentId -> [{name, text}]
+
+async function extractPdfText(file){
+  var buf=await file.arrayBuffer();
+  var pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  var text='';
+  for(var i=1;i<=pdf.numPages;i++){
+    var page=await pdf.getPage(i);
+    var content=await page.getTextContent();
+    text+=content.items.map(function(it){return it.str;}).join(' ')+'\n';
+  }
+  return text.trim();
+}
+
+function renderZoneFiles(contentId,nameId,zoneId,badgeId){
+  var list=zoneFiles[contentId]||[];
+  var nameEl=document.getElementById(nameId);
+  nameEl.innerHTML=list.map(function(f,idx){
+    return '<div class="upload-fname-row"><span>✓ '+escapeHtml(f.name)+'</span>'+
+      '<span class="upload-fname-remove" onclick="event.stopPropagation();removeZoneFile(\''+contentId+'\','+idx+',\''+nameId+'\',\''+zoneId+'\',\''+(badgeId||'')+'\')">✕</span></div>';
+  }).join('');
+  document.getElementById(zoneId).classList.toggle('has-file',list.length>0);
+  document.getElementById(contentId).value=list.map(function(f){return '--- '+f.name+' ---\n'+f.text;}).join('\n\n');
+  if(badgeId){
+    var b=document.getElementById(badgeId);
+    if(b){
+      if(list.length){b.textContent='✓ Added ('+list.length+')';b.classList.add('filled');}
+      else{b.textContent='Optional';b.classList.remove('filled');}
+    }
   }
 }
+
+function removeZoneFile(contentId,idx,nameId,zoneId,badgeId){
+  zoneFiles[contentId].splice(idx,1);
+  renderZoneFiles(contentId,nameId,zoneId,badgeId||null);
+}
+
+function escapeHtml(s){
+  var d=document.createElement('div'); d.textContent=s; return d.innerHTML;
+}
+
+async function processFiles(files,contentId,nameId,zoneId,badgeId){
+  if(!files||!files.length) return;
+  if(!zoneFiles[contentId]) zoneFiles[contentId]=[];
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    var isPdf=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
+    var isTxt=file.type==='text/plain'||file.name.toLowerCase().endsWith('.txt');
+    try{
+      var text='';
+      if(isPdf){
+        toast('Extracting text from '+file.name+'...');
+        text=await extractPdfText(file);
+        if(!text) toast(file.name+' has no extractable text (scanned image?)','⚠️');
+      } else if(isTxt){
+        text=await file.text();
+      } else {
+        toast('Unsupported file type: '+file.name,'⚠️');
+        continue;
+      }
+      zoneFiles[contentId].push({name:file.name,text:text});
+      toast(file.name+' loaded');
+    } catch(err){
+      console.error(err);
+      toast('Could not read '+file.name,'❌');
+    }
+  }
+  renderZoneFiles(contentId,nameId,zoneId,badgeId);
+}
+
+function handleUpload(inputId,nameId,zoneId,contentId,badgeId){
+  var inp=document.getElementById(inputId);
+  if(!inp||!inp.files||!inp.files.length) return;
+  processFiles(Array.from(inp.files),contentId,nameId,zoneId,badgeId);
+  inp.value='';
+}
+
+function setupDropZone(zoneId,contentId,nameId,badgeId){
+  var zone=document.getElementById(zoneId);
+  if(!zone) return;
+  ['dragenter','dragover'].forEach(function(evt){
+    zone.addEventListener(evt,function(e){e.preventDefault();e.stopPropagation();zone.classList.add('drag-over');});
+  });
+  ['dragleave','drop'].forEach(function(evt){
+    zone.addEventListener(evt,function(e){e.preventDefault();e.stopPropagation();zone.classList.remove('drag-over');});
+  });
+  zone.addEventListener('drop',function(e){
+    var files=e.dataTransfer&&e.dataTransfer.files;
+    if(files&&files.length) processFiles(Array.from(files),contentId,nameId,zoneId,badgeId);
+  });
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  setupDropZone('z-md','fc-md','fn-md','badge-physician');
+  setupDropZone('z-nurse','fc-nurse','fn-nurse','badge-nurse');
+  setupDropZone('z-pt','fc-pt','fn-pt','badge-pt');
+  setupDropZone('z-ot','fc-ot','fn-ot','badge-ot');
+  setupDropZone('z-slp','fc-slp','fn-slp','badge-slp');
+  setupDropZone('z-denial','fc-denial','fn-denial',null);
+  setupDropZone('z-aclinical','fc-aclinical','fn-aclinical',null);
+});
 
 /* ── PASTE SYNC ── */
 function syncPaste(pasteId,contentId,badgeId){
   var val=document.getElementById(pasteId).value;
-  var existing=gv(contentId);
-  if(!existing.startsWith('[Attached:')){
+  var hasFiles=zoneFiles[contentId]&&zoneFiles[contentId].length>0;
+  if(!hasFiles){
     document.getElementById(contentId).value=val;
   }
   if(badgeId&&val.trim().length>10){
