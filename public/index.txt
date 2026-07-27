@@ -1,0 +1,57 @@
+ClearPath Health
+IRF INTELLIGENCE PLATFORM
+Sign in to your account
+Work email
+Password
+Sign In
+No account yet? Create one
+Forgot password?
+ClearPath Health
+IRF INTELLIGENCE PLATFORM
+OVERVIEW
+⊞
+Dashboard
+TOOLS
+📋
+Note Generator
+⚖️
+Appeal Generator
+INTELLIGENCE
+📊
+Outcome Log
+🧠
+Patterns
+Criteria Active
+WISeR v6.0 · 42 CFR §412.622
+Medicare · MA · Commercial
+Dashboard
+ClearPath Health — IRF Admission Intelligence
+
+WISeR AI Active
+Good morning.
+Your IRF documentation and intelligence tools are ready.
+TOTAL CASES
+0
+logged in ClearPath
+APPROVAL RATE
+—
+log outcomes to track
+PENDING REVIEW
+0
+awaiting payer decision
+REVENUE AT RISK
+$0
+from denied claims
+📋
+Note Generator + Screener
+Upload physician, nurse, PT, OT, and SLP notes. ClearPath extracts patient info automatically, then generates a complete IRF admission note with inline gap flags.
+Open Tool →
+⚖️
+Appeal Generator
+Upload a denial letter and clinical documentation. Generate a complete, evidence-based appeal letter with regulatory citations.
+Build Appeal →
+🧠 Payer Intelligence — Emerging Patterns
+0 cases logged
+📈
+Your outcomes database is empty — let's change that.
+Every case you submit and track through ClearPath becomes a data point. Once you've logged 10+ outcomes, this panel surfaces real patterns: which documentation elements drive approvals, which payers flag specific codes, and what language correlates with success.

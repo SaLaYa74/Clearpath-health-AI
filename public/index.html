@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClearPath Health</title>
+<!-- Supabase JS SDK -->
+<script>
+(function(){
+  var cdns=[
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js',
+    'https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js'
+  ];
+  var i=0;
+  function tryNext(){
+    if(i>=cdns.length) return;
+    var s=document.createElement('script');
+    s.src=cdns[i++];
+    s.onload=function(){console.log('Supabase loaded from',s.src);};
+    s.onerror=function(){console.warn('CDN failed, trying next');tryNext();};
+    document.head.appendChild(s);
+  }
+  tryNext();
+})();
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+:root{
+  --navy:#0B1F3A;--navy-mid:#152E52;
+  --teal:#0D7A6E;--teal-light:#12A090;--teal-faint:#E8F5F3;
+  --amber:#D97706;--amber-faint:#FEF3C7;--amber-border:rgba(217,119,6,0.3);
+  --red:#DC2626;--red-faint:#FEF2F2;
+  --green:#059669;--green-faint:#ECFDF5;
+  --slate:#64748B;--slate-light:#CBD5E1;--slate-faint:#F8FAFC;
+  --white:#FFFFFF;--text:#1E293B;--text-soft:#475569;--border:#E2E8F0;
+  --radius:10px;--radius-lg:16px;
+  --shadow:0 1px 3px rgba(0,0,0,0.08),0 4px 16px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.1),0 8px 32px rgba(0,0,0,0.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',-apple-system,sans-serif;background:#F0F4F8;color:var(--text);min-height:100vh;font-size:14px;line-height:1.6;}
+.app-shell{display:flex;min-height:100vh;}
+.sidebar{width:240px;background:var(--navy);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;}
+.sidebar-brand{padding:24px 20px 20px;border-bottom:1px solid rgba(255,255,255,0.08);}
+.brand-name{font-family:'DM Serif Display',serif;font-size:20px;color:var(--white);letter-spacing:-0.3px;}
+.brand-tagline{font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;letter-spacing:0.5px;text-transform:uppercase;}
+.sidebar-nav{padding:16px 12px;flex:1;}
+.nav-label{font-size:10px;font-weight:600;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin:16px 0 6px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:13px;transition:all 0.15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left;font-family:'Inter',sans-serif;}
+.nav-item:hover{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.9);}
+.nav-item.active{background:var(--teal);color:var(--white);font-weight:600;}
+.sidebar-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,0.08);}
+.criteria-badge{background:rgba(13,122,110,0.2);border:1px solid rgba(13,122,110,0.35);border-radius:6px;padding:8px 10px;font-size:11px;color:rgba(255,255,255,0.55);line-height:1.5;}
+.criteria-badge strong{color:#4DD9C8;display:block;margin-bottom:2px;}
+.main{margin-left:240px;flex:1;}
+.topbar{background:var(--white);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.topbar-left h2{font-size:15px;font-weight:600;color:var(--text);}
+.topbar-left p{font-size:11.5px;color:var(--slate);}
+.wiser-pill{display:flex;align-items:center;gap:6px;background:var(--teal-faint);border:1px solid rgba(13,122,110,0.2);border-radius:20px;padding:5px 12px;font-size:11.5px;color:var(--teal);font-weight:500;}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.8);}}
+.page{display:none;padding:28px 32px;}
+.page.active{display:block;}
+.page-header{margin-bottom:24px;}
+.page-header h1{font-family:'DM Serif Display',serif;font-size:26px;color:var(--navy);margin-bottom:4px;}
+.page-header p{font-size:13px;color:var(--slate);}
+.card{background:var(--white);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:16px;}
+.card-title{font-size:13px;font-weight:600;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+label{display:block;font-size:11.5px;font-weight:500;color:var(--text-soft);margin-bottom:4px;margin-top:12px;}
+label:first-child{margin-top:0;}
+input[type="text"],input[type="date"],select,textarea{width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text);background:var(--white);transition:border-color 0.15s;outline:none;}
+input:focus,select:focus,textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,122,110,0.08);}
+textarea{resize:vertical;min-height:80px;line-height:1.5;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+input[type="file"]{display:none;}
+/* UPLOAD+PASTE */
+.upload-paste-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start;margin-top:4px;}
+.upload-zone{border:2px dashed var(--slate-light);border-radius:var(--radius);padding:12px 10px;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--slate-faint);user-select:none;min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.upload-zone:hover{border-color:var(--teal);background:var(--teal-faint);}
+.upload-zone.has-file{border-color:var(--green);background:var(--green-faint);border-style:solid;}
+.upload-zone-icon{font-size:16px;margin-bottom:3px;}
+.upload-zone-text{font-size:11px;color:var(--slate);line-height:1.4;}
+.upload-zone-text strong{color:var(--teal);}
+.upload-fname{font-size:10.5px;color:var(--green);font-weight:600;margin-top:4px;word-break:break-all;}
+.paste-side-label{font-size:11px;font-weight:500;color:var(--text-soft);margin-bottom:4px;display:block;}
+.paste-side textarea{min-height:92px;font-size:12px;resize:vertical;margin-top:0;}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;font-family:'Inter',sans-serif;}
+.btn-primary{background:var(--teal);color:var(--white);}
+.btn-primary:hover{background:var(--teal-light);transform:translateY(-1px);}
+.btn-primary:disabled{background:var(--slate-light);cursor:not-allowed;transform:none;}
+.btn-ghost{background:transparent;color:var(--slate);border:1.5px solid var(--border);}
+.btn-ghost:hover{background:var(--slate-faint);color:var(--text);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.generate-cta{background:linear-gradient(135deg,var(--navy) 0%,#1a3a6e 100%);color:var(--white);width:100%;padding:14px;font-size:15px;font-weight:700;border-radius:10px;border:none;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s;margin-top:8px;}
+.generate-cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(11,31,58,0.3);}
+.generate-cta:disabled{opacity:0.6;cursor:not-allowed;transform:none;box-shadow:none;}
+.extract-btn{width:100%;padding:11px;border-radius:8px;background:var(--teal-faint);border:1.5px solid rgba(13,122,110,0.3);color:var(--teal);font-size:12.5px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.15s;margin-bottom:12px;}
+.extract-btn:hover{background:var(--teal);color:var(--white);}
+.extract-btn:disabled{opacity:0.5;cursor:not-allowed;}
+/* INSURER BAR */
+.insurer-bar{background:var(--white);border-radius:var(--radius-lg);padding:14px 18px;box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:16px;}
+.insurer-bar-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.insurer-label{font-size:12px;font-weight:600;color:var(--navy);}
+.insurer-detect-btn{font-size:11.5px;color:var(--teal);font-weight:500;cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;}
+.insurer-detect-btn:hover{text-decoration:underline;}
+.insurer-chips{display:flex;gap:7px;flex-wrap:wrap;}
+.insurer-chip{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);background:var(--slate-faint);color:var(--slate);transition:all 0.15s;font-family:'Inter',sans-serif;}
+.insurer-chip:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-faint);}
+.insurer-chip.selected{border-color:var(--teal);background:var(--teal);color:var(--white);}
+/* TWO COL */
+.two-col{display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start;}
+.input-col{position:sticky;top:76px;max-height:calc(100vh - 96px);overflow-y:auto;padding-right:4px;padding-bottom:20px;}
+.input-col::-webkit-scrollbar{width:4px;}
+.input-col::-webkit-scrollbar-thumb{background:var(--slate-light);border-radius:4px;}
+.output-col{min-width:0;}
+/* CLINICAL SECTIONS */
+.clinical-section{border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px;background:var(--white);}
+.sec-header{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--slate-faint);cursor:pointer;user-select:none;transition:background 0.15s;}
+.sec-header:hover{background:#EEF2F7;}
+.sec-header.is-open{border-bottom:1.5px solid var(--border);}
+.sec-icon{font-size:16px;}
+.sec-title{font-size:13px;font-weight:600;color:var(--navy);flex:1;}
+.sec-badge{font-size:10.5px;color:var(--slate);background:var(--border);padding:2px 8px;border-radius:10px;white-space:nowrap;}
+.sec-badge.filled{background:var(--green-faint);color:var(--green);}
+.sec-chev{font-size:11px;color:var(--slate);transition:transform 0.2s;margin-left:4px;}
+.sec-chev.open{transform:rotate(180deg);}
+.sec-body{padding:14px;display:none;}
+.sec-hint{font-size:11.5px;color:var(--slate);margin-bottom:10px;line-height:1.5;padding:7px 10px;background:var(--slate-faint);border-radius:7px;border-left:3px solid var(--slate-light);}
+/* OVERRIDE / PATIENT SECTION */
+.override-section{border:1.5px solid var(--amber-border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;background:var(--white);}
+.override-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--amber-faint);cursor:pointer;user-select:none;}
+.override-header:hover{filter:brightness(0.97);}
+.override-title{font-size:12.5px;font-weight:600;color:#92400E;flex:1;}
+.override-sub{font-size:11px;color:#B45309;margin-top:1px;}
+.override-body{padding:14px;display:none;}
+/* EXTRACTED CARD */
+.extracted-card{background:var(--white);border-radius:var(--radius-lg);border:1.5px solid rgba(13,122,110,0.25);box-shadow:0 2px 8px rgba(13,122,110,0.07);padding:14px 16px;margin-bottom:12px;display:none;}
+.extracted-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.extracted-card-title{font-size:12.5px;font-weight:600;color:var(--teal);display:flex;align-items:center;gap:6px;}
+.extracted-card-edit{font-size:11px;color:var(--slate);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:3px 8px;border-radius:6px;border:1px solid var(--border);}
+.extracted-card-edit:hover{color:var(--teal);border-color:var(--teal);}
+.extracted-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;}
+.extracted-label{font-size:10px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:1px;}
+.extracted-value{font-size:12px;color:var(--text);font-weight:500;margin-bottom:4px;}
+.extracted-value.missing{color:var(--slate-light);font-style:italic;font-weight:400;}
+.extracted-confidence{font-size:10.5px;color:var(--slate);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+/* NOTE OUTPUT */
+.note-wrap{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden;}
+.note-hdr{padding:13px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--slate-faint);}
+.note-hdr-title{font-size:13px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:8px;}
+.note-hdr-actions{display:flex;gap:8px;}
+.note-body{padding:24px;font-size:13px;line-height:1.9;color:var(--text);min-height:300px;white-space:pre-wrap;font-family:'Inter',sans-serif;}
+.note-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;gap:12px;}
+.note-placeholder-icon{font-size:42px;opacity:0.3;}
+.flag-amber{background:rgba(217,119,6,0.13);border-bottom:2px solid var(--amber);cursor:pointer;border-radius:2px;transition:background 0.15s;}
+.flag-amber:hover{background:rgba(217,119,6,0.25);}
+.flag-red{background:rgba(220,38,38,0.1);border-bottom:2px solid var(--red);cursor:pointer;border-radius:2px;transition:background 0.15s;}
+.flag-red:hover{background:rgba(220,38,38,0.2);}
+.flag-tooltip{display:none;position:fixed;background:var(--navy);color:var(--white);padding:12px 15px;border-radius:10px;font-size:12px;line-height:1.5;max-width:300px;z-index:9999;box-shadow:var(--shadow-md);pointer-events:none;}
+.flag-tooltip.visible{display:block;}
+.tt-title{font-weight:700;margin-bottom:5px;font-size:12.5px;}
+.tt-body{color:rgba(255,255,255,0.85);}
+.tt-suggest{color:#4DD9C8;margin-top:6px;font-size:11.5px;line-height:1.4;}
+.tt-cite{color:rgba(255,255,255,0.4);font-size:11px;margin-top:5px;font-style:italic;}
+.gap-summary{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);margin-top:16px;overflow:hidden;}
+.gap-hdr{padding:13px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--slate-faint);}
+.gap-hdr-title{font-size:13px;font-weight:600;color:var(--navy);}
+.gap-counts{display:flex;gap:10px;}
+.gap-pill{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:12px;}
+.gap-pill.red{background:var(--red-faint);color:var(--red);}
+.gap-pill.amber{background:var(--amber-faint);color:var(--amber);}
+.gap-list{padding:12px 16px;}
+.gap-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:6px;}
+.gap-item.critical{background:var(--red-faint);border-left:3px solid var(--red);}
+.gap-item.warning{background:var(--amber-faint);border-left:3px solid var(--amber);}
+.gap-icon{font-size:14px;flex-shrink:0;margin-top:1px;}
+.gap-label{font-size:12.5px;font-weight:600;color:var(--text);}
+.gap-detail{font-size:11.5px;color:var(--text-soft);margin-top:2px;line-height:1.5;}
+.gap-suggest{font-size:11.5px;color:var(--teal);margin-top:4px;line-height:1.4;}
+.gap-cite{font-size:11px;color:var(--slate);margin-top:3px;font-style:italic;}
+.stream-bar{display:none;align-items:center;gap:8px;padding:10px 24px;background:var(--teal-faint);border-bottom:1px solid rgba(13,122,110,0.15);font-size:12px;color:var(--teal);font-weight:500;}
+.stream-bar.on{display:flex;}
+.dot-pulse span{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--teal);animation:dp 1.2s infinite;margin:0 1px;}
+.dot-pulse span:nth-child(2){animation-delay:0.2s;}
+.dot-pulse span:nth-child(3){animation-delay:0.4s;}
+@keyframes dp{0%,80%,100%{transform:scale(0.6);opacity:0.4;}40%{transform:scale(1);opacity:1;}}
+.outcome-tracker{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);margin-top:16px;overflow:hidden;}
+.ot-hdr{padding:13px 20px;border-bottom:1px solid var(--border);background:var(--slate-faint);font-size:13px;font-weight:600;color:var(--navy);}
+.ot-body{padding:16px 20px;}
+.outcome-btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.outcome-btn{padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;border:2px solid;background:transparent;font-family:'Inter',sans-serif;transition:all 0.15s;}
+.outcome-btn.approved{border-color:var(--green);color:var(--green);}
+.outcome-btn.approved:hover,.outcome-btn.approved.sel{background:var(--green);color:var(--white);}
+.outcome-btn.denied{border-color:var(--red);color:var(--red);}
+.outcome-btn.denied:hover,.outcome-btn.denied.sel{background:var(--red);color:var(--white);}
+.outcome-btn.pending{border-color:var(--amber);color:var(--amber);}
+.outcome-btn.pending:hover,.outcome-btn.pending.sel{background:var(--amber);color:var(--white);}
+.outcome-btn.appealed{border-color:var(--navy);color:var(--navy);}
+.outcome-btn.appealed:hover,.outcome-btn.appealed.sel{background:var(--navy);color:var(--white);}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+.stat-card{background:var(--white);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow);border:1px solid var(--border);}
+.stat-lbl{font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+.stat-val{font-size:26px;font-weight:700;color:var(--navy);font-family:'DM Serif Display',serif;line-height:1;}
+.stat-sub{font-size:11.5px;color:var(--slate);margin-top:4px;}
+.cg{color:var(--green);}.ca{color:var(--amber);}.cr{color:var(--red);}
+.tool-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;}
+.tool-card{background:var(--white);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow);border:1px solid var(--border);cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;}
+.tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.tool-card.notegen::before{background:var(--teal);}
+.tool-card.appeal::before{background:var(--amber);}
+.tool-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--teal-light);}
+.tool-icon{font-size:26px;margin-bottom:10px;}
+.tool-name{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:6px;}
+.tool-desc{font-size:12px;color:var(--text-soft);line-height:1.5;margin-bottom:14px;}
+.tool-cta{font-size:12px;font-weight:600;color:var(--teal);}
+.pat-panel{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden;margin-bottom:20px;}
+.pat-hdr{padding:14px 20px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--navy) 0%,#1a3a6e 100%);display:flex;align-items:center;justify-content:space-between;}
+.pat-title{font-size:13px;font-weight:600;color:var(--white);}
+.pat-badge{font-size:11px;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:12px;}
+.pat-body{padding:20px;}
+.pat-empty{text-align:center;padding:24px 16px;}
+.pat-empty-icon{font-size:30px;margin-bottom:10px;opacity:0.4;}
+.pat-empty-title{font-size:13.5px;font-weight:600;color:var(--navy);margin-bottom:6px;}
+.pat-empty-text{font-size:12.5px;color:var(--slate);line-height:1.6;max-width:400px;margin:0 auto;}
+.pat-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:8px;background:var(--slate-faint);border:1px solid var(--border);margin-bottom:10px;}
+.pat-item-icon{font-size:18px;flex-shrink:0;}
+.pat-item-text{font-size:12.5px;color:var(--text);line-height:1.5;}
+.pat-item-text strong{color:var(--navy);}
+.pat-item-meta{font-size:11px;color:var(--slate);margin-top:3px;}
+.log-wrap{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden;}
+.log-hdr{padding:14px 20px;border-bottom:1px solid var(--border);background:var(--slate-faint);display:flex;align-items:center;justify-content:space-between;}
+.log-title{font-size:13px;font-weight:600;color:var(--navy);}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:0.5px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--slate-faint);}
+td{padding:11px 16px;font-size:12.5px;color:var(--text);border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--slate-faint);}
+.obadge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:600;}
+.obadge.approved{background:var(--green-faint);color:var(--green);}
+.obadge.denied{background:var(--red-faint);color:var(--red);}
+.obadge.pending{background:var(--amber-faint);color:var(--amber);}
+.obadge.appealed{background:#EFF6FF;color:#2563EB;}
+.empty-log{text-align:center;padding:48px 20px;color:var(--slate);font-size:13px;}
+.disclaimer{background:var(--amber-faint);border:1px solid var(--amber-border);border-radius:var(--radius);padding:9px 13px;font-size:11.5px;color:#92400E;display:flex;gap:8px;align-items:flex-start;margin-bottom:14px;}
+.phi-warn{background:var(--red-faint);border:1px solid rgba(220,38,38,0.25);border-radius:var(--radius);padding:9px 13px;font-size:11.5px;color:#991B1B;display:flex;gap:8px;align-items:flex-start;margin-bottom:14px;}
+.appeal-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.output-area{border:1.5px solid var(--border);border-radius:var(--radius);min-height:400px;padding:16px;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;font-family:'Inter',sans-serif;outline:none;background:var(--white);}
+.output-area:focus{border-color:var(--teal);}
+.output-ph{color:var(--slate-light);font-style:italic;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:var(--white);padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);z-index:9999;transform:translateY(80px);transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);display:flex;align-items:center;gap:8px;max-width:360px;}
+.toast.show{transform:translateY(0);}
+.sec-lbl{font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:0.7px;margin:4px 0 8px;}
+.step-row{display:flex;align-items:center;gap:8px;margin:16px 0 8px;}
+.step-num{width:20px;height:20px;border-radius:50%;background:var(--navy);color:var(--white);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-label{font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:0.7px;}
+
+/* ── AUTH OVERLAY ── */
+.auth-overlay{position:fixed;inset:0;background:#F0F4F8;z-index:9999;display:flex;align-items:center;justify-content:center;}
+.auth-overlay.hidden{display:none;}
+.auth-box{background:var(--white);border-radius:20px;padding:44px 40px;box-shadow:0 8px 40px rgba(11,31,58,0.14);border:1px solid var(--border);width:100%;max-width:400px;}
+.auth-brand{font-family:"DM Serif Display",serif;font-size:22px;color:var(--navy);margin-bottom:4px;}
+.auth-tagline{font-size:12px;color:var(--slate);margin-bottom:32px;letter-spacing:0.4px;text-transform:uppercase;}
+.auth-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:20px;}
+.auth-field{margin-bottom:14px;}
+.auth-field label{font-size:11.5px;font-weight:500;color:var(--text-soft);margin-bottom:5px;display:block;margin-top:0;}
+.auth-field input{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:"Inter",sans-serif;color:var(--text);outline:none;transition:border-color 0.15s;}
+.auth-field input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,122,110,0.08);}
+.auth-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--navy) 0%,#1a3a6e 100%);color:var(--white);border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:"Inter",sans-serif;margin-top:8px;transition:all 0.15s;}
+.auth-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(11,31,58,0.25);}
+.auth-btn:disabled{opacity:0.6;cursor:not-allowed;transform:none;box-shadow:none;}
+.auth-toggle{text-align:center;margin-top:16px;font-size:12.5px;color:var(--slate);}
+.auth-toggle a{color:var(--teal);cursor:pointer;font-weight:600;text-decoration:none;}
+.auth-toggle a:hover{text-decoration:underline;}
+.auth-error{background:var(--red-faint);border:1px solid rgba(220,38,38,0.25);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--red);margin-bottom:14px;display:none;}
+.auth-error.show{display:block;}
+.auth-notice{background:var(--teal-faint);border:1px solid rgba(13,122,110,0.2);border-radius:8px;padding:9px 12px;font-size:11.5px;color:var(--teal);margin-bottom:14px;}
+.user-pill{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate);}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--teal);color:var(--white);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.signout-btn{font-size:11.5px;color:var(--slate);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:"Inter",sans-serif;transition:all 0.15s;}
+.signout-btn:hover{border-color:var(--red);color:var(--red);}
+.audit-meta{font-size:11px;color:var(--slate);font-style:italic;}
+.config-bar{background:var(--amber-faint);border-bottom:1px solid var(--amber-border);padding:8px 32px;font-size:12px;color:#92400E;display:none;align-items:center;gap:8px;}
+.config-bar.show{display:flex;}
+</style>
+</head>
+<body>
+
+<!-- ── CONFIG BAR (shown when Supabase not configured) ── -->
+<div class="config-bar" id="config-bar">
+  ⚠️ <strong>Developer setup required:</strong> Add your Supabase URL and anon key below, then add your Anthropic API key to the server proxy. See comments in the JS.
+</div>
+
+<!-- ── AUTH OVERLAY ── -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-brand">ClearPath Health</div>
+    <div class="auth-tagline">IRF Intelligence Platform</div>
+    <div id="auth-notice" class="auth-notice" style="display:none;"></div>
+    <div class="auth-error" id="auth-error"></div>
+    <div id="auth-login-view">
+      <div class="auth-title">Sign in to your account</div>
+      <div class="auth-field"><label>Work email</label><input type="email" id="auth-email" placeholder="you@hospital.com" autocomplete="email"></div>
+      <div class="auth-field"><label>Password</label><input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="auth-btn" id="auth-signin-btn" onclick="doSignIn()">Sign In</button>
+      <div class="auth-toggle">No account yet? <a onclick="showSignup()">Create one</a></div>
+      <div class="auth-toggle" style="margin-top:8px;"><a onclick="showReset()">Forgot password?</a></div>
+    </div>
+    <div id="auth-signup-view" style="display:none;">
+      <div class="auth-title">Create your account</div>
+      <div class="auth-field"><label>Full name</label><input type="text" id="auth-fullname" placeholder="Jane Smith"></div>
+      <div class="auth-field"><label>Work email</label><input type="email" id="auth-email-signup" placeholder="you@hospital.com"></div>
+      <div class="auth-field"><label>Password</label><input type="password" id="auth-password-signup" placeholder="8+ characters"></div>
+      <button class="auth-btn" id="auth-signup-btn" onclick="doSignUp()">Create Account</button>
+      <div class="auth-toggle">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+    </div>
+    <div id="auth-reset-view" style="display:none;">
+      <div class="auth-title">Reset your password</div>
+      <div class="auth-field"><label>Work email</label><input type="email" id="auth-email-reset" placeholder="you@hospital.com"></div>
+      <button class="auth-btn" onclick="doReset()">Send Reset Link</button>
+      <div class="auth-toggle"><a onclick="showLogin()">Back to sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<div class="app-shell">
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-name">ClearPath Health</div>
+    <div class="brand-tagline">IRF Intelligence Platform</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-label">Overview</div>
+    <button class="nav-item active" onclick="showPage('dashboard',this)"><span>⊞</span> Dashboard</button>
+    <div class="nav-label">Tools</div>
+    <button class="nav-item" onclick="showPage('notegen',this)"><span>📋</span> Note Generator</button>
+    <button class="nav-item" onclick="showPage('appeal',this)"><span>⚖️</span> Appeal Generator</button>
+    <div class="nav-label">Intelligence</div>
+    <button class="nav-item" onclick="showPage('outcomes',this)"><span>📊</span> Outcome Log</button>
+    <button class="nav-item" onclick="showPage('patterns',this)"><span>🧠</span> Patterns</button>
+  </div>
+  <div class="sidebar-footer">
+    <div class="criteria-badge"><strong>Criteria Active</strong>WISeR v6.0 · 42 CFR §412.622<br>Medicare · MA · Commercial</div>
+  </div>
+</nav>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left"><h2 id="tb-title">Dashboard</h2><p id="tb-sub">ClearPath Health — IRF Admission Intelligence</p></div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="wiser-pill"><div class="pulse-dot"></div>WISeR AI Active</div>
+      <div class="user-pill" id="user-pill" style="display:none;">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <span id="user-email-display"></span>
+        <button class="signout-btn" onclick="doSignOut()">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header"><h1>Good morning.</h1><p>Your IRF documentation and intelligence tools are ready.</p></div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-lbl">Total Cases</div><div class="stat-val" id="ds-total">0</div><div class="stat-sub">logged in ClearPath</div></div>
+      <div class="stat-card"><div class="stat-lbl">Approval Rate</div><div class="stat-val cg" id="ds-rate">—</div><div class="stat-sub" id="ds-rate-sub">log outcomes to track</div></div>
+      <div class="stat-card"><div class="stat-lbl">Pending Review</div><div class="stat-val ca" id="ds-pending">0</div><div class="stat-sub">awaiting payer decision</div></div>
+      <div class="stat-card"><div class="stat-lbl">Revenue at Risk</div><div class="stat-val cr" id="ds-risk">$0</div><div class="stat-sub">from denied claims</div></div>
+    </div>
+    <div class="tool-cards">
+      <div class="tool-card notegen" onclick="showPage('notegen',document.querySelectorAll('.nav-item')[1])">
+        <div class="tool-icon">📋</div><div class="tool-name">Note Generator + Screener</div>
+        <div class="tool-desc">Upload physician, nurse, PT, OT, and SLP notes. ClearPath extracts patient info automatically, then generates a complete IRF admission note with inline gap flags.</div>
+        <div class="tool-cta">Open Tool →</div>
+      </div>
+      <div class="tool-card appeal" onclick="showPage('appeal',document.querySelectorAll('.nav-item')[2])">
+        <div class="tool-icon">⚖️</div><div class="tool-name">Appeal Generator</div>
+        <div class="tool-desc">Upload a denial letter and clinical documentation. Generate a complete, evidence-based appeal letter with regulatory citations.</div>
+        <div class="tool-cta">Build Appeal →</div>
+      </div>
+    </div>
+    <div class="pat-panel">
+      <div class="pat-hdr"><div class="pat-title">🧠 Payer Intelligence — Emerging Patterns</div><div class="pat-badge" id="dash-pat-count">0 cases logged</div></div>
+      <div class="pat-body" id="dash-pat-body">
+        <div class="pat-empty"><div class="pat-empty-icon">📈</div><div class="pat-empty-title">Your outcomes database is empty — let's change that.</div><div class="pat-empty-text">Every case you submit and track through ClearPath becomes a data point. Once you've logged 10+ outcomes, this panel surfaces real patterns: which documentation elements drive approvals, which payers flag specific codes, and what language correlates with success.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTE GENERATOR -->
+  <div class="page" id="page-notegen">
+    <div class="page-header"><h1>Note Generator</h1><p>Upload clinical evaluations below. Patient info is extracted automatically — no manual entry needed.</p></div>
+    <div class="phi-warn">🔒 <span><strong>PHI Notice:</strong> Do not enter real patient data until a HIPAA BAA is in place with all vendors. Use de-identified or sample data for testing.</span></div>
+    <div class="disclaimer">⚠️ <span>Generated notes are drafts for physician review, editing, and signature only. The attending physician is responsible for all clinical documentation.</span></div>
+
+    <div class="insurer-bar">
+      <div class="insurer-bar-top"><div class="insurer-label">Select Insurer</div><button class="insurer-detect-btn" onclick="autoDetect()">✨ Auto-detect from notes</button></div>
+      <div class="insurer-chips">
+        <button class="insurer-chip selected" onclick="selectIns(this,'Medicare Traditional')">Medicare</button>
+        <button class="insurer-chip" onclick="selectIns(this,'UnitedHealthcare Medicare Advantage')">UHC MA</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Humana Medicare Advantage')">Humana MA</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Aetna Medicare Advantage')">Aetna MA</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Anthem / Blue Cross Blue Shield')">Anthem/BCBS</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Cigna Medicare Advantage')">Cigna MA</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Kaiser Permanente')">Kaiser</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Medicaid')">Medicaid</button>
+        <button class="insurer-chip" onclick="selectIns(this,'Commercial / Other')">Commercial</button>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="input-col">
+
+        <div class="step-row"><div class="step-num">1</div><div class="step-label">Upload or paste clinical documentation</div></div>
+
+        <!-- PHYSICIAN -->
+        <div class="clinical-section">
+          <div class="sec-header is-open" onclick="toggleSec('physician')">
+            <span class="sec-icon">👨‍⚕️</span><span class="sec-title">Physician / Medical Notes</span>
+            <span class="sec-badge" id="badge-physician">Optional</span>
+            <span class="sec-chev open" id="chev-physician">▼</span>
+          </div>
+          <div class="sec-body" id="body-physician" style="display:block;">
+            <div class="sec-hint">Exam findings, complexity justification, therapy tolerance, PAS documentation, goals, and risk factors.</div>
+            <div class="upload-paste-row">
+              <div>
+                <div class="upload-zone" id="z-md" onclick="document.getElementById('f-md').click()">
+                  <div class="upload-zone-icon">📎</div>
+                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-fname" id="fn-md"></div>
+                </div>
+                <input type="file" id="f-md" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-md','fn-md','z-md','fc-md','badge-physician')">
+                <input type="hidden" id="fc-md">
+              </div>
+              <div class="paste-side">
+                <span class="paste-side-label">Or paste text</span>
+                <textarea id="n-md-paste" placeholder="Paste physician note here..." oninput="syncPaste('n-md-paste','fc-md','badge-physician')"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NURSE -->
+        <div class="clinical-section">
+          <div class="sec-header" onclick="toggleSec('nurse')">
+            <span class="sec-icon">🩺</span><span class="sec-title">Nursing Notes</span>
+            <span class="sec-badge" id="badge-nurse">Optional</span>
+            <span class="sec-chev" id="chev-nurse">▼</span>
+          </div>
+          <div class="sec-body" id="body-nurse">
+            <div class="sec-hint">ADL assistance levels, skin integrity, bowel/bladder, cognitive observations, medication management, caregiver education.</div>
+            <div class="upload-paste-row">
+              <div>
+                <div class="upload-zone" id="z-nurse" onclick="document.getElementById('f-nurse').click()">
+                  <div class="upload-zone-icon">📎</div>
+                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-fname" id="fn-nurse"></div>
+                </div>
+                <input type="file" id="f-nurse" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-nurse','fn-nurse','z-nurse','fc-nurse','badge-nurse')">
+                <input type="hidden" id="fc-nurse">
+              </div>
+              <div class="paste-side">
+                <span class="paste-side-label">Or paste text</span>
+                <textarea id="n-nurse-paste" placeholder="Paste nursing notes here..." oninput="syncPaste('n-nurse-paste','fc-nurse','badge-nurse')"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PT -->
+        <div class="clinical-section">
+          <div class="sec-header" onclick="toggleSec('pt')">
+            <span class="sec-icon">🦵</span><span class="sec-title">Physical Therapy Evaluation</span>
+            <span class="sec-badge" id="badge-pt">Optional</span>
+            <span class="sec-chev" id="chev-pt">▼</span>
+          </div>
+          <div class="sec-body" id="body-pt">
+            <div class="sec-hint">Mobility, gait, strength, balance, transfers, functional mobility status, recommended therapy intensity.</div>
+            <div class="upload-paste-row">
+              <div>
+                <div class="upload-zone" id="z-pt" onclick="document.getElementById('f-pt').click()">
+                  <div class="upload-zone-icon">📎</div>
+                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-fname" id="fn-pt"></div>
+                </div>
+                <input type="file" id="f-pt" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-pt','fn-pt','z-pt','fc-pt','badge-pt')">
+                <input type="hidden" id="fc-pt">
+              </div>
+              <div class="paste-side">
+                <span class="paste-side-label">Or paste text</span>
+                <textarea id="n-pt-paste" placeholder="Paste PT evaluation here..." oninput="syncPaste('n-pt-paste','fc-pt','badge-pt')"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OT -->
+        <div class="clinical-section">
+          <div class="sec-header" onclick="toggleSec('ot')">
+            <span class="sec-icon">🤲</span><span class="sec-title">Occupational Therapy Evaluation</span>
+            <span class="sec-badge" id="badge-ot">Optional</span>
+            <span class="sec-chev" id="chev-ot">▼</span>
+          </div>
+          <div class="sec-body" id="body-ot">
+            <div class="sec-hint">ADL performance, upper extremity function, cognitive-ADL status, visual perception, recommended therapy intensity.</div>
+            <div class="upload-paste-row">
+              <div>
+                <div class="upload-zone" id="z-ot" onclick="document.getElementById('f-ot').click()">
+                  <div class="upload-zone-icon">📎</div>
+                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-fname" id="fn-ot"></div>
+                </div>
+                <input type="file" id="f-ot" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-ot','fn-ot','z-ot','fc-ot','badge-ot')">
+                <input type="hidden" id="fc-ot">
+              </div>
+              <div class="paste-side">
+                <span class="paste-side-label">Or paste text</span>
+                <textarea id="n-ot-paste" placeholder="Paste OT evaluation here..." oninput="syncPaste('n-ot-paste','fc-ot','badge-ot')"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLP -->
+        <div class="clinical-section">
+          <div class="sec-header" onclick="toggleSec('slp')">
+            <span class="sec-icon">🗣️</span><span class="sec-title">Speech-Language Pathology</span>
+            <span class="sec-badge" id="badge-slp">Optional</span>
+            <span class="sec-chev" id="chev-slp">▼</span>
+          </div>
+          <div class="sec-body" id="body-slp">
+            <div class="sec-hint">Swallowing assessment, dysphagia severity, communication status, cognitive-communication deficits.</div>
+            <div class="upload-paste-row">
+              <div>
+                <div class="upload-zone" id="z-slp" onclick="document.getElementById('f-slp').click()">
+                  <div class="upload-zone-icon">📎</div>
+                  <div class="upload-zone-text"><strong>Upload PDF</strong><br>or drag &amp; drop</div>
+                  <div class="upload-fname" id="fn-slp"></div>
+                </div>
+                <input type="file" id="f-slp" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-slp','fn-slp','z-slp','fc-slp','badge-slp')">
+                <input type="hidden" id="fc-slp">
+              </div>
+              <div class="paste-side">
+                <span class="paste-side-label">Or paste text</span>
+                <textarea id="n-slp-paste" placeholder="Paste SLP evaluation here..." oninput="syncPaste('n-slp-paste','fc-slp','badge-slp')"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: EXTRACT -->
+        <div class="step-row" style="margin-top:18px;"><div class="step-num">2</div><div class="step-label">Extract patient info from documents</div></div>
+        <button class="extract-btn" id="extract-btn" onclick="extractPatientInfo()">
+          ✨ Extract Patient Info from Documents
+        </button>
+
+        <!-- EXTRACTED SUMMARY CARD -->
+        <div class="extracted-card" id="extracted-card">
+          <div class="extracted-card-hdr">
+            <div class="extracted-card-title">✅ Patient Info Extracted</div>
+            <button class="extracted-card-edit" onclick="toggleOverride()">Edit / Override ▾</button>
+          </div>
+          <div class="extracted-grid" id="extracted-grid"></div>
+          <div class="extracted-confidence" id="extracted-confidence"></div>
+        </div>
+
+        <!-- PATIENT OVERRIDE — hidden until extracted or manually opened -->
+        <div class="override-section" id="override-section" style="display:none;">
+          <div class="override-header" onclick="toggleOverride()">
+            <span style="font-size:14px;">✏️</span>
+            <div style="flex:1;">
+              <div class="override-title">Patient Info — Manual Override</div>
+              <div class="override-sub">Leave blank to use extracted values</div>
+            </div>
+            <span id="chev-override" style="font-size:11px;color:#B45309;transition:transform 0.2s;">▼</span>
+          </div>
+          <div class="override-body" id="body-override">
+            <div class="row2">
+              <div><label>Patient Name</label><input type="text" id="n-name" placeholder="Last, First MI"></div>
+              <div><label>Date of Birth</label><input type="date" id="n-dob"></div>
+            </div>
+            <div class="row2">
+              <div><label>Medicare ID / MBI</label><input type="text" id="n-mbi" placeholder="1EG4-TE5-MK72"></div>
+              <div><label>Admission Date</label><input type="date" id="n-admit"></div>
+            </div>
+            <label>Primary Diagnosis</label>
+            <input type="text" id="n-dx" placeholder="e.g. Right hemiplegia following ischemic stroke">
+            <div class="row2">
+              <div><label>ICD-10</label><input type="text" id="n-icd" placeholder="e.g. I69.351"></div>
+              <div><label>Est. Length of Stay</label><input type="text" id="n-los" placeholder="e.g. 14-21 days"></div>
+            </div>
+            <label>Comorbidities</label>
+            <textarea id="n-comorbid" placeholder="List secondary diagnoses..." style="min-height:56px;"></textarea>
+            <label>Prior Level of Function</label>
+            <textarea id="n-plof" placeholder="Functional status before acute event..." style="min-height:56px;"></textarea>
+            <label>Anticipated Discharge Destination</label>
+            <select id="n-discharge"><option value="">Select...</option><option>Home with outpatient therapy</option><option>Home with home health services</option><option>Skilled nursing facility</option><option>Assisted living facility</option></select>
+            <label>Attending Physician</label>
+            <input type="text" id="n-md" placeholder="Dr. Name, MD — PM&R">
+          </div>
+        </div>
+
+        <!-- STEP 3: GENERATE -->
+        <div class="step-row" style="margin-top:18px;"><div class="step-num">3</div><div class="step-label">Generate the note</div></div>
+        <button class="generate-cta" onclick="generateNote()" id="gen-btn">✨ Generate Note + Screen for Gaps</button>
+
+      </div><!-- /input-col -->
+
+      <!-- OUTPUT COLUMN -->
+      <div class="output-col">
+        <div class="note-wrap">
+          <div class="note-hdr">
+            <div class="note-hdr-title">📄 IRF Admission Note</div>
+            <div class="note-hdr-actions">
+              <button class="btn btn-ghost btn-sm" onclick="copyNote()">📋 Copy</button>
+              <button class="btn btn-sm" id="to-appeal-btn" style="display:none;background:var(--amber);color:white;border:none;" onclick="sendToAppeal()">→ Appeal</button>
+            </div>
+          </div>
+          <div class="stream-bar" id="note-stream"><div class="dot-pulse"><span></span><span></span><span></span></div><span id="stream-msg">Reading clinical documents...</span></div>
+          <div id="note-body" class="note-body">
+            <div class="note-placeholder">
+              <div class="note-placeholder-icon">📋</div>
+              <div style="font-size:13px;color:var(--slate);line-height:1.9;">
+                Upload or paste clinical docs above, then click Generate.<br><br>
+                Patient info is extracted automatically — no manual typing.<br><br>
+                Your note will appear here with<br>
+                <span style="background:rgba(217,119,6,0.15);border-bottom:2px solid #D97706;padding:1px 5px;border-radius:2px;">amber warnings</span> and
+                <span style="background:rgba(220,38,38,0.1);border-bottom:2px solid #DC2626;padding:1px 5px;border-radius:2px;">red critical flags</span><br>
+                highlighting gaps to fix before submission.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="gap-summary" id="gap-summary" style="display:none;">
+          <div class="gap-hdr">
+            <div class="gap-hdr-title">⚠️ Documentation Gaps — hover highlights for details</div>
+            <div class="gap-counts"><span class="gap-pill red" id="gap-crit">0 Critical</span><span class="gap-pill amber" id="gap-warn">0 Warnings</span></div>
+          </div>
+          <div class="gap-list" id="gap-list"></div>
+        </div>
+
+        <div class="outcome-tracker" id="outcome-tracker" style="display:none;">
+          <div class="ot-hdr">📊 Track This Submission — Build Your Payer Database</div>
+          <div class="ot-body">
+            <div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">Log the outcome after submission. Every data point strengthens your payer intelligence.</div>
+            <label>Submission Outcome</label>
+            <div class="outcome-btns">
+              <button class="outcome-btn approved" onclick="setOutcome(this,'approved')">✓ Approved</button>
+              <button class="outcome-btn denied" onclick="setOutcome(this,'denied')">✗ Denied</button>
+              <button class="outcome-btn pending" onclick="setOutcome(this,'pending')">⏳ Pending</button>
+              <button class="outcome-btn appealed" onclick="setOutcome(this,'appealed')">↩ Appealed</button>
+            </div>
+            <label style="margin-top:14px;">Notes (optional)</label>
+            <textarea id="outcome-notes" placeholder="Denial reason, payer feedback, what worked..." style="min-height:60px;"></textarea>
+            <button class="btn btn-primary" style="margin-top:12px;width:100%;" onclick="saveOutcome()">💾 Save to Outcome Log</button>
+          </div>
+        </div>
+      </div><!-- /output-col -->
+    </div><!-- /two-col -->
+  </div><!-- /page-notegen -->
+
+  <!-- APPEAL -->
+  <div class="page" id="page-appeal">
+    <div class="page-header"><h1>Appeal Generator</h1><p>Upload the denial letter and clinical documentation. ClearPath drafts a complete, evidence-based appeal letter.</p></div>
+    <div class="disclaimer">⚠️ <span>Review all appeal letters carefully before sending. Ensure all clinical claims are accurate and supported by the medical record.</span></div>
+    <div class="appeal-grid">
+      <div>
+        <div class="card">
+          <div class="card-title">❌ Denial Information</div>
+          <div class="row2"><div><label>Patient Name</label><input type="text" id="a-name" placeholder="Last, First"></div><div><label>Medicare ID / MBI</label><input type="text" id="a-mbi" placeholder="MBI"></div></div>
+          <label>Payer / Insurer</label><input type="text" id="a-payer" placeholder="e.g. Humana Medicare Advantage">
+          <label>Procedure / Claim Denied</label><input type="text" id="a-procedure" placeholder="e.g. IRF admission — CPT 97542">
+          <label>Primary Denial Reason</label>
+          <select id="a-denial-type"><option value="">Select...</option><option value="not_medically_necessary">Not medically necessary</option><option value="experimental">Experimental / investigational</option><option value="missing_docs">Insufficient documentation</option><option value="level_of_care">Inappropriate level of care</option><option value="no_improvement">No expected functional improvement</option><option value="conservative_tx">Conservative treatment not exhausted</option><option value="other">Other</option></select>
+          <label>Denial Letter Text</label><textarea id="a-denial-text" placeholder="Paste the denial letter text or key excerpts..." style="min-height:110px;"></textarea>
+          <label style="margin-top:14px;">Upload Denial Letter (PDF or TXT)</label>
+          <div class="upload-zone" id="z-denial" onclick="document.getElementById('f-denial').click()"><div class="upload-zone-icon">📎</div><div class="upload-zone-text"><strong>Click to upload</strong> denial letter</div><div class="upload-fname" id="fn-denial"></div></div>
+          <input type="file" id="f-denial" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-denial','fn-denial','z-denial','fc-denial',null)">
+          <input type="hidden" id="fc-denial">
+        </div>
+        <div class="card">
+          <div class="card-title">📄 Supporting Clinical Documentation</div>
+          <textarea id="a-clinical" placeholder="Paste physician note, SOAP note, or clinical documentation..." style="min-height:110px;"></textarea>
+          <label style="margin-top:14px;">Upload Clinical Docs (PDF or TXT)</label>
+          <div class="upload-zone" id="z-aclinical" onclick="document.getElementById('f-aclinical').click()"><div class="upload-zone-icon">📎</div><div class="upload-zone-text"><strong>Click to upload</strong> clinical documentation</div><div class="upload-fname" id="fn-aclinical"></div></div>
+          <input type="file" id="f-aclinical" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleUpload('f-aclinical','fn-aclinical','z-aclinical','fc-aclinical',null)">
+          <input type="hidden" id="fc-aclinical">
+          <label>Attending Physician</label><input type="text" id="a-md" placeholder="Dr. Name, MD — Specialty">
+        </div>
+        <button class="generate-cta" style="background:linear-gradient(135deg,#92400E,#D97706);" onclick="generateAppeal()" id="appeal-btn">⚖️ Generate Appeal Letter</button>
+      </div>
+      <div>
+        <div style="background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden;">
+          <div class="note-hdr"><div class="note-hdr-title">📨 Appeal Letter Draft</div><div class="note-hdr-actions"><button class="btn btn-ghost btn-sm" onclick="copyOutput('appeal-out')">📋 Copy</button></div></div>
+          <div class="stream-bar" id="appeal-stream"><div class="dot-pulse"><span></span><span></span><span></span></div>Drafting appeal letter...</div>
+          <div id="appeal-out" class="output-area" contenteditable="true" style="border:none;border-radius:0;min-height:500px;"><span class="output-ph">Your appeal letter will appear here. Fill in the denial information and click Generate.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTCOME LOG -->
+  <div class="page" id="page-outcomes">
+    <div class="page-header"><h1>Outcome Log</h1><p>Every tracked submission builds your payer intelligence database.</p></div>
+    <div class="log-wrap">
+      <div class="log-hdr"><div class="log-title">📋 Submission History</div><button class="btn btn-ghost btn-sm" onclick="clearLog()" style="color:var(--red);">🗑 Clear All</button></div>
+      <div id="log-body"><div class="empty-log"><div style="font-size:28px;margin-bottom:8px;opacity:0.3;">📋</div>No outcomes logged yet. Generate a note and track the submission outcome to start building your payer intelligence database.</div></div>
+    </div>
+  </div>
+
+  <!-- PATTERNS -->
+  <div class="page" id="page-patterns">
+    <div class="page-header"><h1>Payer Intelligence</h1><p>Patterns emerge from your logged outcomes. The more you track, the smarter ClearPath gets.</p></div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-lbl">Cases Analyzed</div><div class="stat-val" id="p-total">0</div><div class="stat-sub">across all payers</div></div>
+      <div class="stat-card"><div class="stat-lbl">Top Payer</div><div class="stat-val" style="font-size:16px;margin-top:4px;" id="p-top">—</div><div class="stat-sub" id="p-top-sub">by case volume</div></div>
+      <div class="stat-card"><div class="stat-lbl">Best Approval Rate</div><div class="stat-val cg" id="p-best">—</div><div class="stat-sub" id="p-best-sub">no data yet</div></div>
+      <div class="stat-card"><div class="stat-lbl">Needs Attention</div><div class="stat-val cr" id="p-worst">—</div><div class="stat-sub" id="p-worst-sub">no data yet</div></div>
+    </div>
+    <div class="pat-panel">
+      <div class="pat-hdr"><div class="pat-title">🧠 Detected Patterns</div><div class="pat-badge" id="pat-count">0 cases</div></div>
+      <div class="pat-body" id="pat-body">
+        <div class="pat-empty"><div class="pat-empty-icon">🧠</div><div class="pat-empty-title">Not enough data yet — keep logging.</div><div class="pat-empty-text">At 10 cases you'll see payer behavior signals. At 50 you'll have meaningful approval rate data. At 500+ cases across multiple hospitals, this becomes a predictive intelligence engine no competitor can replicate.</div></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /main -->
+</div><!-- /app-shell -->
+
+<div class="flag-tooltip" id="flag-tooltip">
+  <div class="tt-title" id="tt-title"></div>
+  <div class="tt-body" id="tt-body"></div>
+  <div class="tt-suggest" id="tt-suggest"></div>
+  <div class="tt-cite" id="tt-cite"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── STATE ── */
+var selInsurer    = 'Medicare Traditional';
+var caseData      = null;
+var selOutcome    = null;
+var caseFlags     = [];
+var tooltip       = null;
+var extractedInfo = null;
+
+/* ── NAV ── */
+var pageMeta = {
+  dashboard:['Dashboard','ClearPath Health — IRF Admission Intelligence'],
+  notegen:  ['Note Generator','Generate IRF admission notes with inline gap screening'],
+  appeal:   ['Appeal Generator','Draft evidence-based appeal letters'],
+  outcomes: ['Outcome Log','Track submission outcomes and build your payer database'],
+  patterns: ['Payer Intelligence','Patterns from your logged outcomes']
+};
+function showPage(id,navEl){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  document.getElementById('page-'+id).classList.add('active');
+  if(navEl) navEl.classList.add('active');
+  document.getElementById('tb-title').textContent=pageMeta[id][0];
+  document.getElementById('tb-sub').textContent=pageMeta[id][1];
+  if(id==='outcomes') renderLog();
+  if(id==='patterns') renderPatterns();
+  if(id==='dashboard') renderDash();
+  window.scrollTo(0,0);
+}
+
+/* ── COLLAPSIBLE ── */
+function toggleSec(key){
+  var body=document.getElementById('body-'+key);
+  var hdr=body.previousElementSibling;
+  var chev=document.getElementById('chev-'+key);
+  var open=body.style.display==='block';
+  body.style.display=open?'none':'block';
+  hdr.classList.toggle('is-open',!open);
+  if(chev){chev.classList.toggle('open',!open);}
+}
+function toggleOverride(){
+  var body=document.getElementById('body-override');
+  var chev=document.getElementById('chev-override');
+  var open=body.style.display==='block';
+  body.style.display=open?'none':'block';
+  if(chev){chev.style.transform=open?'':'rotate(180deg)';}
+}
+
+/* ── INSURER ── */
+function selectIns(el,name){
+  document.querySelectorAll('.insurer-chip').forEach(function(c){c.classList.remove('selected');});
+  el.classList.add('selected'); selInsurer=name;
+}
+function autoDetect(){
+  var t=getAllDocText().toLowerCase();
+  var d='Medicare Traditional';
+  if(t.indexOf('humana')>-1) d='Humana Medicare Advantage';
+  else if(t.indexOf('united')>-1||t.indexOf('uhc')>-1) d='UnitedHealthcare Medicare Advantage';
+  else if(t.indexOf('aetna')>-1) d='Aetna Medicare Advantage';
+  else if(t.indexOf('anthem')>-1||t.indexOf('bcbs')>-1||t.indexOf('blue cross')>-1) d='Anthem / Blue Cross Blue Shield';
+  else if(t.indexOf('cigna')>-1) d='Cigna Medicare Advantage';
+  else if(t.indexOf('kaiser')>-1) d='Kaiser Permanente';
+  else if(t.indexOf('medicaid')>-1) d='Medicaid';
+  document.querySelectorAll('.insurer-chip').forEach(function(c){
+    c.classList.remove('selected');
+    if(c.textContent.toLowerCase().indexOf(d.split(' ')[0].toLowerCase())>-1) c.classList.add('selected');
+  });
+  selInsurer=d; toast('Detected: '+d,'✨');
+}
+
+/* ── DOC CONTENT ── */
+function getAllDocText(){
+  return ['fc-md','n-md-paste','fc-nurse','n-nurse-paste','fc-pt','n-pt-paste',
+          'fc-ot','n-ot-paste','fc-slp','n-slp-paste']
+    .map(function(id){var el=document.getElementById(id);return el?el.value:'';})
+    .filter(Boolean).join('\n\n');
+}
+function hasAnyContent(){return getAllDocText().trim().length>20;}
+
+function combineDoc(fileId,pasteId){
+  var fv=gv(fileId)||''; var pv=gv(pasteId)||'';
+  var parts=[];
+  if(fv) parts.push(fv);
+  if(pv&&pv!==fv) parts.push(pv);
+  return parts.filter(Boolean).join('\n');
+}
+
+/* ── FILE UPLOAD ── */
+function handleUpload(inputId,nameId,zoneId,contentId,badgeId){
+  var inp=document.getElementById(inputId);
+  if(!inp||!inp.files||!inp.files[0]) return;
+  var file=inp.files[0];
+  document.getElementById(nameId).textContent='✓ '+file.name;
+  document.getElementById(zoneId).classList.add('has-file');
+  if(badgeId){var b=document.getElementById(badgeId);if(b){b.textContent='✓ Added';b.classList.add('filled');}}
+  var isTxt=file.type==='text/plain'||file.name.toLowerCase().endsWith('.txt');
+  if(isTxt){
+    var r=new FileReader();
+    r.onload=function(e){document.getElementById(contentId).value=e.target.result;toast(file.name+' loaded');};
+    r.onerror=function(){toast('Could not read file','❌');};
+    r.readAsText(file);
+  } else {
+    document.getElementById(contentId).value='[Attached: '+file.name+' ('+(file.size/1024).toFixed(1)+' KB) — paste text below for AI extraction]';
+    toast(file.name+' attached — paste text below for AI extraction');
+  }
+}
+
+/* ── PASTE SYNC ── */
+function syncPaste(pasteId,contentId,badgeId){
+  var val=document.getElementById(pasteId).value;
+  var existing=gv(contentId);
+  if(!existing.startsWith('[Attached:')){
+    document.getElementById(contentId).value=val;
+  }
+  if(badgeId&&val.trim().length>10){
+    var b=document.getElementById(badgeId);
+    if(b&&!b.classList.contains('filled')){b.textContent='✓ Added';b.classList.add('filled');}
+  }
+}
+
+/* ── EXTRACTION ── */
+async function extractPatientInfo(){
+  if(!hasAnyContent()){toast('Upload or paste at least one document first','⚠️');return;}
+  var btn=document.getElementById('extract-btn');
+  btn.disabled=true; btn.textContent='⏳ Extracting patient info...';
+  var sys='You are a medical records specialist. Extract structured patient information from the provided clinical documents. Return ONLY valid JSON, no markdown or backticks. If a field cannot be found in the documents, use null — do NOT guess or fabricate. Schema: {"name":"Last, First MI or null","dob":"MM/DD/YYYY or null","mbi":"Medicare Beneficiary Identifier or null","admit_date":"MM/DD/YYYY or null","primary_dx":"full diagnosis or null","icd10":"ICD-10 code or null","los_estimate":"estimated length of stay or null","comorbidities":"comma-separated list or null","plof":"prior level of function description or null","discharge_destination":"anticipated destination or null","attending_physician":"Dr Name credentials or null","confidence":"high|medium|low","missing_fields":["array of field names not found"]}';
+  var usr='Extract patient information from these clinical documents:\n\n'+getAllDocText().substring(0,6000);
+  try{
+    var res=await fetch('/api/generate',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,system:sys,messages:[{role:'user',content:usr}]})
+    });
+    if(!res.ok) throw new Error('api_'+res.status);
+    var data=await res.json();
+    var raw=(data.content&&data.content[0])?data.content[0].text:'';
+    var info=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    extractedInfo=info; populateExtracted(info); toast('Patient info extracted','✅');
+  } catch(err){
+    var demo={name:'[Demo] Smith, John R.',dob:'01/15/1947',mbi:'1EG4-TE5-MK72',
+      admit_date:new Date().toLocaleDateString('en-US'),
+      primary_dx:'Right hemiplegia following ischemic stroke',icd10:'I69.351',
+      los_estimate:'14–21 days',
+      comorbidities:'Hypertension, Type 2 Diabetes Mellitus, Atrial Fibrillation',
+      plof:'Independent ambulation and ADLs prior to acute event',
+      discharge_destination:'Home with home health services',
+      attending_physician:'[Demo] Dr. James Williams, MD — PM&R',
+      confidence:'high',missing_fields:[]};
+    extractedInfo=demo; populateExtracted(demo);
+    toast('Demo extraction — add API key for live AI','ℹ️');
+  } finally{
+    btn.disabled=false; btn.textContent='✨ Extract Patient Info from Documents';
+  }
+}
+
+function populateExtracted(info){
+  document.getElementById('extracted-card').style.display='block';
+  var fields=[
+    {label:'Patient Name',key:'name'},{label:'Date of Birth',key:'dob'},
+    {label:'Medicare ID',key:'mbi'},{label:'Admission Date',key:'admit_date'},
+    {label:'Primary Diagnosis',key:'primary_dx'},{label:'ICD-10',key:'icd10'},
+    {label:'Est. LOS',key:'los_estimate'},{label:'Comorbidities',key:'comorbidities'},
+    {label:'Prior Function',key:'plof'},{label:'Discharge To',key:'discharge_destination'},
+    {label:'Attending',key:'attending_physician'}
+  ];
+  var html='';
+  fields.forEach(function(f){
+    var val=info[f.key];
+    html+='<div><div class="extracted-label">'+f.label+'</div>'
+      +'<div class="extracted-value'+(val?'':' missing')+'">'+(val||'Not found in docs')+'</div></div>';
+  });
+  document.getElementById('extracted-grid').innerHTML=html;
+  var missing=info.missing_fields&&info.missing_fields.length?info.missing_fields:[];
+  var conf='Confidence: '+(info.confidence||'medium').toUpperCase();
+  if(missing.length) conf+=' · Not found: '+missing.join(', ');
+  document.getElementById('extracted-confidence').textContent=conf;
+  // Show override section and populate fields
+  document.getElementById('override-section').style.display='block';
+  if(info.name) document.getElementById('n-name').value=info.name;
+  if(info.dob){try{var p=info.dob.split('/');if(p.length===3)document.getElementById('n-dob').value=p[2]+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');}catch(e){}}
+  if(info.mbi) document.getElementById('n-mbi').value=info.mbi;
+  if(info.admit_date){try{var ap=info.admit_date.split('/');if(ap.length===3)document.getElementById('n-admit').value=ap[2]+'-'+ap[0].padStart(2,'0')+'-'+ap[1].padStart(2,'0');}catch(e){}}
+  if(info.primary_dx) document.getElementById('n-dx').value=info.primary_dx;
+  if(info.icd10) document.getElementById('n-icd').value=info.icd10;
+  if(info.los_estimate) document.getElementById('n-los').value=info.los_estimate;
+  if(info.comorbidities) document.getElementById('n-comorbid').value=info.comorbidities;
+  if(info.plof) document.getElementById('n-plof').value=info.plof;
+  if(info.attending_physician) document.getElementById('n-md').value=info.attending_physician;
+  if(info.discharge_destination){
+    var sel=document.getElementById('n-discharge');
+    var kw=info.discharge_destination.toLowerCase().split(' ')[0];
+    for(var i=0;i<sel.options.length;i++){if(sel.options[i].text.toLowerCase().indexOf(kw)>-1){sel.selectedIndex=i;break;}}
+  }
+}
+
+/* ── UTILITIES ── */
+function toast(msg,icon){
+  icon=icon||'✓';
+  var t=document.getElementById('toast');
+  t.textContent=icon+' '+msg; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},3200);
+}
+function copyNote(){doCopy(document.getElementById('note-body').innerText||'');}
+function copyOutput(id){
+  var t=document.getElementById(id).innerText||'';
+  if(t.indexOf('will appear here')>-1){toast('Nothing to copy yet','⚠️');return;}
+  doCopy(t);
+}
+function doCopy(text){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){toast('Copied to clipboard');});
+  } else {
+    var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    toast('Copied to clipboard');
+  }
+}
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');}
+function escA(s){return String(s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/\n/g,' ').substring(0,200);}
+function gv(id){var el=document.getElementById(id);return el?el.value:'';}
+
+function gather(){
+  var ex=extractedInfo||{};
+  return{
+    name:gv('n-name')||ex.name||'',dob:gv('n-dob')||ex.dob||'',
+    mbi:gv('n-mbi')||ex.mbi||'',admit:gv('n-admit')||ex.admit_date||'',
+    dx:gv('n-dx')||ex.primary_dx||'',icd:gv('n-icd')||ex.icd10||'',
+    los:gv('n-los')||ex.los_estimate||'',comorbid:gv('n-comorbid')||ex.comorbidities||'',
+    plof:gv('n-plof')||ex.plof||'',discharge:gv('n-discharge')||ex.discharge_destination||'',
+    md:gv('n-md')||ex.attending_physician||'',
+    mdDoc:combineDoc('fc-md','n-md-paste'),nurseDoc:combineDoc('fc-nurse','n-nurse-paste'),
+    ptDoc:combineDoc('fc-pt','n-pt-paste'),otDoc:combineDoc('fc-ot','n-ot-paste'),
+    slpDoc:combineDoc('fc-slp','n-slp-paste'),
+    insurer:selInsurer,timestamp:new Date().toISOString()
+  };
+}
+
+/* ── TOOLTIP ── */
+function showTip(e,title,body,suggest,cite){
+  if(!tooltip) return;
+  document.getElementById('tt-title').textContent=title||'';
+  document.getElementById('tt-body').textContent=body||'';
+  document.getElementById('tt-suggest').textContent=suggest?'💡 '+suggest:'';
+  document.getElementById('tt-cite').textContent=cite||'';
+  tooltip.classList.add('visible'); posTip(e);
+}
+function hideTip(){if(tooltip)tooltip.classList.remove('visible');}
+function posTip(e){
+  if(!tooltip) return;
+  var x=e.clientX+14,y=e.clientY+14,tw=300;
+  tooltip.style.left=(x+tw>window.innerWidth?x-tw-20:x)+'px';
+  tooltip.style.top=(y+150>window.innerHeight?y-155:y)+'px';
+}
+
+/* ── NOTE GENERATOR ── */
+async function generateNote(){
+  var d=gather(); caseData=d;
+  if(!hasAnyContent()){toast('Upload or paste at least one clinical document first','⚠️');return;}
+  var btn=document.getElementById('gen-btn');
+  btn.disabled=true; btn.textContent='⏳ Generating...';
+  var sb=document.getElementById('note-stream'); var nb=document.getElementById('note-body');
+  sb.classList.add('on'); nb.innerHTML='';
+  document.getElementById('gap-summary').style.display='none';
+  document.getElementById('outcome-tracker').style.display='none';
+  document.getElementById('to-appeal-btn').style.display='none';
+
+  var sys='You are a Medicare IRF documentation specialist. Insurer: '+d.insurer+'.\n\nSynthesize multi-disciplinary clinical evaluations into a complete physician-ready IRF admission note.\n\nRules:\n1. Use ONLY information present in the provided documents. Never fabricate or hallucinate clinical details.\n2. If a discipline section (e.g. SLP) has no documentation, only include that section if you can reasonably infer relevant information from the other documents without hallucinating. If not, omit the section entirely.\n3. For sections with partial information, document what is available and flag any gaps.\n4. Write in professional clinical documentation style suitable for physician review and signature.\n5. Return ONLY valid JSON, no markdown.\n\nSchema: {"note":"<full admission note, newlines as \\n>","flags":[{"severity":"critical|warning","phrase":"<exact substring from note max 8 words>","title":"<gap name>","detail":"<why this is a problem>","suggestion":"<specific language to add>","citation":"<42 CFR section>"}]}\n\ncritical=payer likely denies without this. warning=strengthens claim. Max 8 flags.';
+
+  var usr='INSURER: '+d.insurer+'\n\nPATIENT INFO (extracted from documents):\nName: '+d.name+'\nDOB: '+d.dob+'\nMBI: '+d.mbi+'\nAdmission Date: '+d.admit+'\nPrimary Dx: '+d.dx+' | ICD-10: '+d.icd+'\nEst. LOS: '+d.los+'\nComorbidities: '+d.comorbid+'\nPrior Level of Function: '+d.plof+'\nAnticipated Discharge: '+d.discharge+'\nAttending: '+d.md+'\n\n--- PHYSICIAN / MEDICAL NOTES ---\n'+d.mdDoc+'\n\n--- NURSING NOTES ---\n'+d.nurseDoc+'\n\n--- PHYSICAL THERAPY EVALUATION ---\n'+d.ptDoc+'\n\n--- OCCUPATIONAL THERAPY EVALUATION ---\n'+d.otDoc+'\n\n--- SPEECH-LANGUAGE PATHOLOGY ---\n'+d.slpDoc;
+
+  try{
+    /* ── PRE-SUMMARIZATION: Condense each section before note generation ── */
+    document.getElementById('stream-msg').textContent='Reading clinical documents...';
+    sb.classList.add('on');
+
+    var sumSys='You are a clinical documentation specialist. Summarize the provided clinical notes into a concise structured summary. Preserve ALL clinically significant findings: diagnoses, dates, lab values, FIM/AM-PAC scores, functional levels, medication names and doses, physician names, therapy recommendations, and any specific measurements. Remove only redundant narrative and administrative text. Output plain text only.';
+
+    async function summarizeSection(label, text){
+      if(!text||text.trim().length<50) return text;
+      if(text.trim().length<800) return text; // short enough, no need to summarize
+      try{
+        var r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,
+            system:sumSys,
+            messages:[{role:'user',content:'Summarize this '+label+' documentation, preserving all clinical details:\n\n'+text.substring(0,40000)}]})});
+        if(!r.ok) return text; // fallback to original if fails
+        var sd=await r.json();
+        var st=(sd.content&&sd.content[0])?sd.content[0].text:'';
+        return st||text;
+      }catch(e){ return text; } // fallback
+    }
+
+    /* Summarize all sections in parallel */
+    document.getElementById('stream-msg').textContent='Summarizing clinical documents...';
+    var summaries=await Promise.all([
+      summarizeSection('physician/medical',d.mdDoc),
+      summarizeSection('nursing',d.nurseDoc),
+      summarizeSection('physical therapy',d.ptDoc),
+      summarizeSection('occupational therapy',d.otDoc),
+      summarizeSection('speech-language pathology',d.slpDoc)
+    ]);
+    var sumMd=summaries[0], sumNurse=summaries[1], sumPt=summaries[2], sumOt=summaries[3], sumSlp=summaries[4];
+
+    /* Build summarized user prompt */
+    var usrSum='INSURER: '+d.insurer+'\n\nPATIENT INFO (extracted from documents):\nName: '+d.name+'\nDOB: '+d.dob+'\nMBI: '+d.mbi+'\nAdmission Date: '+d.admit+'\nPrimary Dx: '+d.dx+' | ICD-10: '+d.icd+'\nEst. LOS: '+d.los+'\nComorbidities: '+d.comorbid+'\nPrior Level of Function: '+d.plof+'\nAnticipated Discharge: '+d.discharge+'\nAttending: '+d.md+'\n\n--- PHYSICIAN / MEDICAL NOTES ---\n'+sumMd+'\n\n--- NURSING NOTES ---\n'+sumNurse+'\n\n--- PHYSICAL THERAPY EVALUATION ---\n'+sumPt+'\n\n--- OCCUPATIONAL THERAPY EVALUATION ---\n'+sumOt+'\n\n--- SPEECH-LANGUAGE PATHOLOGY ---\n'+sumSlp;
+
+    /* ── CALL 2: Generate note as plain text via streaming ── */
+    document.getElementById('stream-msg').textContent='Generating admission note...';
+    var noteSys='You are a Medicare IRF documentation specialist. Insurer: '+d.insurer+'. Synthesize the provided clinical evaluations into a complete, physician-ready IRF admission note.\n\nRules:\n1. Use ONLY information present in the provided documents. Never fabricate or hallucinate clinical details.\n2. Where critical Medicare information is MISSING (e.g. FIM scores, therapy tolerance evidence, qualifying condition, physician certification, SLP evaluation), include a clearly marked placeholder: [REQUIRED: description of what is missing and why it is required for IRF approval and Medicare compliance].\n3. If an entire section has no documentation, include: [MISSING: section name — upload documentation to complete this section].\n4. DO NOT include a Pre-Admission Screening (PAS) section — this is handled separately and should not appear in the generated note.\n5. DO include these sections in order: Patient Demographics, Qualifying Acute Hospital Stay, Primary Diagnosis, Comorbid Conditions, Allergies, Prior Level of Function, History of Present Illness, Relevant Laboratory and Diagnostic Data, Nursing Assessment, Physical Therapy Evaluation, Occupational Therapy Evaluation, Speech-Language Pathology, Medical Necessity Statement, Current Medications, Plan of Care, Physician Certification.\n6. For the Relevant Laboratory and Diagnostic Data section: format all lab values as a plain-text table with dates as columns and lab tests as rows so trends are easy to read. Use dashes and pipes to create the table structure.\n7. Write in professional clinical documentation style suitable for physician review and signature.\n8. Be thorough and complete — do not truncate any section. Include all clinically relevant details from the provided summaries.\n9. Output plain text only — no JSON, no markdown headers, no bullet points.';
+
+    var res1=await fetch('/api/generate',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:16000,stream:true,system:noteSys,messages:[{role:'user',content:usrSum}]})
+    });
+    if(!res1.ok) throw new Error('api_'+res1.status);
+    var reader=res1.body.getReader(),dec=new TextDecoder(),noteText='';
+    var nb=document.getElementById('note-body');
+    nb.innerHTML='';
+    while(true){
+      var chunk=await reader.read(); if(chunk.done) break;
+      var lines=dec.decode(chunk.value,{stream:true}).split('\n');
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i].trim();
+        if(!line.startsWith('data: ')) continue;
+        var ds=line.slice(6).trim();
+        if(ds==='[DONE]') continue;
+        try{var p=JSON.parse(ds);if(p.type==='content_block_delta'&&p.delta&&p.delta.type==='text_delta'){noteText+=p.delta.text;nb.textContent=noteText;}}catch(e){}
+      }
+    }
+
+    /* ── CALL 3: Gap screening against full generated note ── */
+    document.getElementById('stream-msg').textContent='Screening for documentation gaps...';
+    var flagSys='You are a ruthlessly thorough Medicare IRF compliance auditor. Your job is to identify documentation gaps that WILL cause a denial by WISeR AI, Medicare Administrative Contractors, or Medicare Advantage payers.\n\nYou are checking against these specific denial triggers:\n\nCRITICAL MEDICARE IRF CRITERIA (42 CFR §412.622):\n1. PAS (Preadmission Screening) — must document EXACT date and time, must be within 48 hours of admission, must be conducted by a licensed clinician identified by name and credentials\n2. Therapy tolerance — must cite SPECIFIC observed evidence (e.g. minutes tolerated, functional activity performed), NOT just assertion of tolerance\n3. 3-hour rule — must explicitly state patient can tolerate AND benefit from minimum 3 hours/day, 5 days/week. Generic statements are insufficient\n4. Qualifying condition — must explicitly name one of the 13 CMS qualifying conditions (stroke, TBI, spinal cord injury, hip fracture, etc.)\n5. Medical complexity — must explain WHY IRF is required over SNF: specific physician supervision needs, nursing intensity, or complexity that cannot be managed at lower level of care\n6. Functional goals — must be SPECIFIC and MEASURABLE with timeframes. FIM score targets strongly preferred. Vague goals like "improve mobility" are denial triggers\n7. Prior Level of Function (PLOF) — must be explicitly documented with functional baseline BEFORE the acute event\n8. IDT (Interdisciplinary Team) — must name specific disciplines, meeting frequency, and that physician leads. Generic IDT statements are insufficient\n9. Plan of Care — must include specific therapy disciplines, frequency, intensity, and estimated duration\n10. Physician certification — must be present with attending physician name, credentials, and signature block\n\nWISeR AI SPECIFIC TRIGGERS:\n- Missing or non-specific FIM scores (WISeR uses FIM to validate medical necessity)\n- PAS not documented within 48-hour window with exact timestamp\n- Therapy tolerance stated without observed functional evidence\n- Goals without measurable benchmarks or timeframes\n- Missing rehabilitation potential statement\n- Comorbidities listed without explaining how they increase medical complexity\n\nMA PAYER ADDITIONAL REQUIREMENTS:\n- UHC MA: requires explicit statement of expected functional improvement percentage\n- Humana MA: requires documentation that conservative treatment was attempted or contraindicated\n- Aetna MA: requires explicit functional prognosis statement from attending physician\n- Anthem/BCBS: requires documented caregiver training plan for discharge\n- All MA plans: prior authorization reference number should be documented\n\nINSTRUCTIONS:\n- Be highly critical. If something is vague, generic, or missing specifics, flag it.\n- Only flag things that a real payer would use to deny the claim.\n- For each flag, cite the EXACT phrase from the note that is problematic or missing.\n- Return ONLY valid JSON, no markdown, no preamble.\n\nSchema: {"flags":[{"severity":"critical|warning","phrase":"<exact substring from note, max 8 words, or [MISSING] if absent>","title":"<specific gap name>","detail":"<exactly why this will cause denial>","suggestion":"<specific replacement language to add>","citation":"<42 CFR section or payer policy>"}]}\n\ncritical = payer will likely deny without this\nwarning = payer may question or request additional documentation\nReturn between 4 and 8 flags. If the note is genuinely complete, return the 4 most important strengthening opportunities.';
+    var flagUsr='INSURER: '+d.insurer+'\n\nReview this IRF admission note for documentation gaps:\n\n'+noteText;
+    var res2=await fetch('/api/generate',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,system:flagSys,messages:[{role:'user',content:flagUsr}]})
+    });
+    sb.classList.remove('on');
+    var flags=[];
+    if(res2.ok){
+      var fdata=await res2.json();
+      var fraw=(fdata.content&&fdata.content[0])?fdata.content[0].text:'';
+      try{var fresult=JSON.parse(fraw.replace(/```json|```/g,'').trim());flags=fresult.flags||[];}catch(e){console.warn('Flag parse error:',e);}
+    }
+    renderNote(noteText,flags)
+  } catch(err){
+    sb.classList.remove('on');
+    console.error('ClearPath generation error:', err);
+    toast('Error: '+err.message,'❌');
+    var demo=demoNote(d); renderNote(demo.note,demo.flags);
+  } finally{
+    btn.disabled=false; btn.textContent='✨ Generate Note + Screen for Gaps';
+  }
+}
+
+function renderNote(noteText,flags){
+  caseFlags=flags;
+  var html=esc(noteText);
+
+  /* Extract [REQUIRED] and [MISSING] placeholders and add to gaps */
+  var placeholderFlags=[];
+  var lines=noteText.split('\n');
+  lines.forEach(function(line){
+    var reqMatch=line.match(/\[REQUIRED:\s*([^\]]+)\]/);
+    var misMatch=line.match(/\[MISSING:\s*([^\]]+)\]/);
+    if(reqMatch){
+      placeholderFlags.push({severity:'critical',phrase:'',
+        title:'Required: '+reqMatch[1].substring(0,70),
+        detail:reqMatch[1],
+        suggestion:'Complete this field before physician signature and submission.',
+        citation:'42 CFR \u00a7412.622'});
+    }
+    if(misMatch){
+      placeholderFlags.push({severity:'critical',phrase:'',
+        title:'Missing: '+misMatch[1].substring(0,70),
+        detail:misMatch[1],
+        suggestion:'Upload the relevant documentation and regenerate, or complete manually.',
+        citation:'42 CFR \u00a7412.622'});
+    }
+  });
+
+  /* Highlight [REQUIRED] in red */
+  var reqRe=/\[REQUIRED:[^\]]+\]/g;
+  html=html.replace(reqRe,function(m){
+    return '<span style="background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.4);border-radius:4px;padding:1px 5px;color:#991B1B;font-weight:600;font-size:12px;">'+m+'</span>';
+  });
+
+  /* Highlight [MISSING] in amber */
+  var misRe=/\[MISSING:[^\]]+\]/g;
+  html=html.replace(misRe,function(m){
+    return '<span style="background:rgba(217,119,6,0.12);border:1px solid rgba(217,119,6,0.4);border-radius:4px;padding:1px 5px;color:#92400E;font-weight:600;font-size:12px;">'+m+'</span>';
+  });
+
+  /* Apply inline AI gap highlights */
+  var sorted=flags.slice().sort(function(a,b){return b.phrase.length-a.phrase.length;});
+  sorted.forEach(function(f){
+    if(!f.phrase) return;
+    var ep=esc(f.phrase);
+    if(html.indexOf(ep)===-1) return;
+    var cls=f.severity==='critical'?'flag-red':'flag-amber';
+    var span='<span class="'+cls+'" onmouseenter="showTip(event,\''+escA(f.title)+'\',\''+escA(f.detail)+'\',\''+escA(f.suggestion)+'\',\''+escA(f.citation)+'\')" onmouseleave="hideTip()">'+ep+'</span>';
+    html=html.replace(ep,span);
+  });
+
+  document.getElementById('note-body').innerHTML=html;
+  document.getElementById('outcome-tracker').style.display='block';
+  document.getElementById('to-appeal-btn').style.display='inline-flex';
+
+  /* Merge placeholder flags + AI flags into gaps panel */
+  var allFlags=placeholderFlags.concat(flags);
+  caseFlags=allFlags;
+  renderGaps(allFlags);
+  toast('Note generated — review red and amber highlights before submission');
+}
+
+function renderGaps(flags){
+  var crit=flags.filter(function(f){return f.severity==='critical';});
+  var warn=flags.filter(function(f){return f.severity==='warning';});
+  document.getElementById('gap-crit').textContent=crit.length+' Critical';
+  document.getElementById('gap-warn').textContent=warn.length+' Warnings';
+  var list=document.getElementById('gap-list');
+  if(!flags.length){
+    list.innerHTML='<div style="text-align:center;padding:16px;color:var(--green);font-size:13px;font-weight:600;">✅ No significant gaps detected</div>';
+  } else {
+    list.innerHTML=flags.map(function(f){
+      return '<div class="gap-item '+(f.severity==='critical'?'critical':'warning')+'">'
+        +'<div class="gap-icon">'+(f.severity==='critical'?'❌':'⚠️')+'</div>'
+        +'<div><div class="gap-label">'+(f.title||'')+'</div>'
+        +'<div class="gap-detail">'+(f.detail||'')+'</div>'
+        +(f.suggestion?'<div class="gap-suggest">💡 '+f.suggestion+'</div>':'')
+        +(f.citation?'<div class="gap-cite">'+f.citation+'</div>':'')
+        +'</div></div>';
+    }).join('');
+  }
+  document.getElementById('gap-summary').style.display='block';
+}
+
+/* ── OUTCOMES ── */
+function setOutcome(el,o){
+  document.querySelectorAll('.outcome-btn').forEach(function(b){b.classList.remove('sel');});
+  el.classList.add('sel'); selOutcome=o;
+}
+function saveOutcome(){
+  if(!selOutcome){toast('Please select an outcome first','⚠️');return;}
+  if(!caseData){toast('Generate a note first','⚠️');return;}
+  var log=getLog();
+  var entry={id:Date.now(),timestamp:caseData.timestamp,patient:caseData.name||'[Patient]',
+    insurer:caseData.insurer||'Unknown',dx:caseData.dx||'[Dx]',icd:caseData.icd||'',
+    outcome:selOutcome,notes:gv('outcome-notes'),flagCount:caseFlags.length,
+    criticalFlags:caseFlags.filter(function(f){return f.severity==='critical';}).length};
+  entry=saveOutcomeWithAudit(entry);
+  log.push(entry);
+  saveLog(log); toast('Outcome saved ✅');
+  document.getElementById('outcome-tracker').style.display='none';
+  selOutcome=null;
+  document.querySelectorAll('.outcome-btn').forEach(function(b){b.classList.remove('sel');});
+  document.getElementById('outcome-notes').value='';
+  renderDash();
+}
+function getLog(){try{return JSON.parse(localStorage.getItem('cp_outcomes')||'[]');}catch(e){return[];}}
+function saveLog(l){try{localStorage.setItem('cp_outcomes',JSON.stringify(l));}catch(e){}}
+function clearLog(){
+  if(!confirm('Clear all outcome data? This cannot be undone.')) return;
+  localStorage.removeItem('cp_outcomes'); renderLog(); renderDash(); toast('Log cleared','🗑️');
+}
+
+/* ── LOG ── */
+function renderLog(){
+  var log=getLog().reverse(); var body=document.getElementById('log-body');
+  if(!log.length){body.innerHTML='<div class="empty-log"><div style="font-size:28px;margin-bottom:8px;opacity:0.3;">📋</div>No outcomes logged yet.</div>';return;}
+  var lbl={approved:'✓ Approved',denied:'✗ Denied',pending:'⏳ Pending',appealed:'↩ Appealed'};
+  body.innerHTML='<table><thead><tr><th>Date</th><th>Submitted By</th><th>Patient</th><th>Insurer</th><th>Diagnosis</th><th>Outcome</th><th>Crit. Flags</th><th>Notes</th></tr></thead><tbody>'
+    +log.map(function(e){return'<tr><td>'+new Date(e.timestamp).toLocaleDateString()+'<br><span class="audit-meta">'+new Date(e.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span></td><td style="font-size:11.5px;">'+(e.user_name||e.user_email||'<span style="color:var(--slate-light)">—</span>')+'</td><td>'+(e.patient||'—')+'</td><td style="font-size:11.5px;">'+(e.insurer||'—')+'</td><td style="font-size:11.5px;">'+(e.dx||'—')+'</td><td><span class="obadge '+e.outcome+'">'+(lbl[e.outcome]||e.outcome)+'</span></td><td style="text-align:center;">'+(e.criticalFlags>0?'<span style="color:var(--red);font-weight:600;">'+e.criticalFlags+' ❌</span>':'<span style="color:var(--green);">0 ✓</span>')+'</td><td style="font-size:11.5px;color:var(--slate);">'+(e.notes||'—')+'</td></tr>';}).join('')
+    +'</tbody></table>';
+}
+
+/* ── DASHBOARD ── */
+function renderDash(){
+  var log=getLog();
+  var app=log.filter(function(e){return e.outcome==='approved';}).length;
+  var den=log.filter(function(e){return e.outcome==='denied';}).length;
+  var pend=log.filter(function(e){return e.outcome==='pending';}).length;
+  var dec=app+den; var rate=dec>0?Math.round(app/dec*100):null;
+  document.getElementById('ds-total').textContent=log.length;
+  document.getElementById('ds-rate').textContent=rate!==null?rate+'%':'—';
+  document.getElementById('ds-rate-sub').textContent=rate!==null?app+' approved of '+dec+' decided':'log outcomes to track';
+  document.getElementById('ds-pending').textContent=pend;
+  document.getElementById('ds-risk').textContent='$'+(den*1000).toLocaleString();
+  document.getElementById('dash-pat-count').textContent=log.length+' case'+(log.length!==1?'s':'')+' logged';
+  var pb=document.getElementById('dash-pat-body');
+  if(log.length<5){pb.innerHTML='<div class="pat-empty"><div class="pat-empty-icon">📈</div><div class="pat-empty-title">Your outcomes database is building.</div><div class="pat-empty-text">'+log.length+'/10 cases logged. Patterns surface once you have 10+ outcomes tracked.</div></div>';}
+  else{pb.innerHTML=buildInsights(log);}
+}
+
+/* ── PATTERNS ── */
+function renderPatterns(){
+  var log=getLog(); document.getElementById('p-total').textContent=log.length;
+  document.getElementById('pat-count').textContent=log.length+' cases';
+  var ps={};
+  log.forEach(function(e){if(!ps[e.insurer])ps[e.insurer]={a:0,d:0,t:0};ps[e.insurer].t++;if(e.outcome==='approved')ps[e.insurer].a++;if(e.outcome==='denied')ps[e.insurer].d++;});
+  var arr=Object.keys(ps).map(function(n){var s=ps[n];return{name:n,a:s.a,d:s.d,t:s.t,rate:(s.a+s.d>0)?Math.round(s.a/(s.a+s.d)*100):null};});
+  var tv=arr.slice().sort(function(a,b){return b.t-a.t;})[0];
+  var wr=arr.filter(function(p){return p.rate!==null;});
+  var best=wr.slice().sort(function(a,b){return b.rate-a.rate;})[0];
+  var worst=wr.slice().sort(function(a,b){return a.rate-b.rate;})[0];
+  document.getElementById('p-top').textContent=tv?tv.name.split(' ')[0]:'—';
+  document.getElementById('p-top-sub').textContent=tv?tv.t+' cases':'no data yet';
+  document.getElementById('p-best').textContent=best?best.rate+'%':'—';
+  document.getElementById('p-best-sub').textContent=best?best.name.substring(0,22):'no data yet';
+  document.getElementById('p-worst').textContent=worst?worst.rate+'%':'—';
+  document.getElementById('p-worst-sub').textContent=worst?worst.name.substring(0,22):'no data yet';
+  var body=document.getElementById('pat-body');
+  if(log.length<10){body.innerHTML='<div class="pat-empty"><div class="pat-empty-icon">🧠</div><div class="pat-empty-title">Keep logging — '+(10-log.length)+' more case'+(10-log.length!==1?'s':'')+' needed.</div><div class="pat-empty-text">At 10 cases you will see payer behavior signals.</div></div>';}
+  else{body.innerHTML=buildInsights(log);}
+}
+function buildInsights(log){
+  var ins=[];
+  var app=log.filter(function(e){return e.outcome==='approved';});
+  var den=log.filter(function(e){return e.outcome==='denied';});
+  var lfa=app.filter(function(e){return e.criticalFlags===0;}).length;
+  var hfd=den.filter(function(e){return e.criticalFlags>0;}).length;
+  if(app.length>0&&lfa/app.length>0.6) ins.push({icon:'✅',text:'<strong>'+Math.round(lfa/app.length*100)+'% of approved cases</strong> had zero critical documentation flags. Clean documentation strongly correlates with approval.',meta:'Based on '+app.length+' approved cases'});
+  if(den.length>0&&hfd/den.length>0.5) ins.push({icon:'⚠️',text:'<strong>'+Math.round(hfd/den.length*100)+'% of denied cases</strong> had at least one critical flag. Addressing gaps before submission could prevent these denials.',meta:'Based on '+den.length+' denied cases'});
+  var pg={};
+  log.forEach(function(e){if(!pg[e.insurer])pg[e.insurer]=[];pg[e.insurer].push(e);});
+  Object.keys(pg).forEach(function(p){
+    var c=pg[p];if(c.length<3) return;
+    var a=c.filter(function(x){return x.outcome==='approved';}).length;
+    var d=c.filter(function(x){return x.outcome==='denied';}).length;
+    if(a+d===0) return;
+    var r=Math.round(a/(a+d)*100);
+    if(r<60) ins.push({icon:'🔴',text:'<strong>'+p+'</strong> has a <strong>'+r+'% approval rate</strong> in your cases. Review documentation requirements for this payer.',meta:c.length+' cases logged'});
+    else if(r>=85) ins.push({icon:'🟢',text:'<strong>'+p+'</strong> shows a strong <strong>'+r+'% approval rate</strong>. Your documentation approach is working well.',meta:c.length+' cases logged'});
+  });
+  if(!ins.length) return '<div class="pat-empty"><div class="pat-empty-icon">🔍</div><div class="pat-empty-title">Not enough variation yet.</div><div class="pat-empty-text">Keep logging across different payers and diagnoses.</div></div>';
+  return ins.map(function(i){return'<div class="pat-item"><div class="pat-item-icon">'+i.icon+'</div><div><div class="pat-item-text">'+i.text+'</div><div class="pat-item-meta">'+i.meta+'</div></div></div>';}).join('');
+}
+
+/* ── APPEAL ── */
+function sendToAppeal(){
+  document.getElementById('a-clinical').value=document.getElementById('note-body').innerText||'';
+  showPage('appeal',document.querySelectorAll('.nav-item')[2]);
+  toast('Note loaded into Appeal Generator');
+}
+async function generateAppeal(){
+  var btn=document.getElementById('appeal-btn');
+  btn.disabled=true; btn.textContent='⏳ Drafting...';
+  var sb=document.getElementById('appeal-stream'); var out=document.getElementById('appeal-out');
+  sb.classList.add('on'); out.innerHTML='';
+  var pName=gv('a-name'),payer=gv('a-payer'),proc=gv('a-procedure'),
+      dtype=gv('a-denial-type'),dtext=gv('a-denial-text'),
+      clinical=gv('a-clinical'),md=gv('a-md'),dFile=gv('fc-denial'),cFile=gv('fc-aclinical');
+  var sys='You are a Medicare appeals specialist. Generate a complete formal appeal letter with specific regulatory citations (42 CFR §412.622, LCDs, NCDs), strong clinical arguments, and professional formatting ready for physician review and signature.';
+  var usr='PATIENT:'+pName+'\nPAYER:'+payer+'\nPROCEDURE:'+proc+'\nDENIAL:'+(dtype.replace(/_/g,' '))+'\nPHYSICIAN:'+md+'\n\nDENIAL LETTER:\n'+dtext+'\n'+(dFile||'')+'\n\nCLINICAL DOCS:\n'+clinical+'\n'+(cFile||'')+'\n\nWrite formal appeal: date/address block, RE line, formal greeting, appeal statement, clinical arguments with 42 CFR §412.622 citations, conclusion requesting redetermination, signature block.';
+  try{
+    var res=await fetch('/api/generate',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,stream:true,system:sys,messages:[{role:'user',content:usr}]})
+    });
+    if(!res.ok) throw new Error('api_'+res.status);
+    var reader=res.body.getReader(),dec=new TextDecoder(),full='';
+    while(true){
+      var chunk=await reader.read(); if(chunk.done) break;
+      var lines=dec.decode(chunk.value,{stream:true}).split('\n');
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i].trim();
+        if(!line.startsWith('data: ')) continue;
+        var ds=line.slice(6).trim();
+        if(ds==='[DONE]') continue;
+        try{var p=JSON.parse(ds);if(p.type==='content_block_delta'&&p.delta&&p.delta.type==='text_delta'){full+=p.delta.text;out.textContent=full;}}catch(e){}
+      }
+    }
+    sb.classList.remove('on');
+    if(!full) throw new Error('empty');
+    toast('Appeal drafted — review before sending');
+  } catch(err){
+    sb.classList.remove('on');
+    out.textContent=demoAppeal({pName:pName,payer:payer,proc:proc,dtype:dtype,md:md});
+    toast('Demo mode — add API key for AI-generated appeals','ℹ️');
+  } finally{btn.disabled=false;btn.textContent='⚖️ Generate Appeal Letter';}
+}
+
+/* ── DEMO CONTENT ── */
+function demoNote(d){
+  var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  var note='INPATIENT REHABILITATION FACILITY — ADMISSION NOTE\nClearPath Health | '+d.insurer+'\n\nDATE OF ADMISSION: '+(d.admit||today)+'\nPATIENT: '+(d.name||'[Not found in documents]')+'\nDATE OF BIRTH: '+(d.dob||'[Not found]')+'\nMEDICARE ID: '+(d.mbi||'[Not found]')+'\nATTENDING PHYSICIAN: '+(d.md||'[Not found in documents]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPREADMISSION SCREENING [42 CFR §412.622(a)(4)(i)]\n\nPrior Level of Function: '+(d.plof||'[Not documented in provided notes]')+'\n\nExpected Level of Improvement: Patient is expected to achieve modified independence with functional mobility and basic ADLs within the estimated '+(d.los||'14-21 day')+' rehabilitation stay.\n\nComorbidities: '+(d.comorbid||'[Not found in documents]')+'\n\nAnticipated Discharge: '+(d.discharge||'[Not specified]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nDIAGNOSES\n\nPrimary: '+(d.dx||'[Not extracted — required]')+' | ICD-10: '+(d.icd||'[Not found]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nNURSING ASSESSMENT\n\n'+(d.nurseDoc&&d.nurseDoc.trim().length>20&&!d.nurseDoc.startsWith('[Attached:')?'[Nursing assessment synthesized from provided documentation]':'[No nursing documentation provided]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPHYSICAL THERAPY EVALUATION SUMMARY\n\n'+(d.ptDoc&&d.ptDoc.trim().length>20&&!d.ptDoc.startsWith('[Attached:')?'[PT evaluation synthesized from provided documentation]':'[No PT evaluation provided]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nOCCUPATIONAL THERAPY EVALUATION SUMMARY\n\n'+(d.otDoc&&d.otDoc.trim().length>20&&!d.otDoc.startsWith('[Attached:')?'[OT evaluation synthesized from provided documentation]':'[No OT evaluation provided]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nSLP EVALUATION\n\nNot clinically indicated based on available documentation.\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nMEDICAL NECESSITY — IRF LEVEL OF CARE [42 CFR §412.622(a)(3)]\n\n'+(d.mdDoc&&d.mdDoc.trim().length>20&&!d.mdDoc.startsWith('[Attached:')?'[Medical necessity synthesized from physician documentation]':'[Physician documentation required]')+'\n\nThe patient has demonstrated the ability to tolerate and actively participate in an intensive rehabilitation therapy program of at least 3 hours per day, 5 days per week.\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPLAN OF CARE [42 CFR §412.622(a)(4)(ii)]\n\nTherapy Disciplines: Physical Therapy, Occupational Therapy\nIntensity: 3+ hours/day, 5 days/week (minimum 15 hrs/week)\nEst. Duration: '+(d.los||'[to be determined]')+'\n\nWeekly IDT meetings per 42 CFR §412.622(a)(5).\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPHYSICIAN CERTIFICATION\n\nI certify this patient meets all medical necessity criteria under 42 CFR §412.622(a)(3)(4)(5).\n\n'+(d.md||'[Attending Physician — signature required]')+'\nSignature: _________________________ Date: ___________\n\n━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ DEMO MODE — Paste text into sections or add API key for live AI generation';
+  var flags=[
+    {severity:'critical',phrase:'3 hours per day',title:'Therapy Tolerance — Evidence Required',detail:'Asserting tolerance without specific observed evidence is insufficient. WISeR requires documented proof from the preadmission evaluation.',suggestion:'Add: "During preadmission evaluation on [date], patient participated in [X] minutes of combined PT/OT activity demonstrating adequate endurance."',citation:'42 CFR §412.622(a)(3)'},
+    {severity:'critical',phrase:'modified independence with functional mobility',title:'Functional Goals Lack Specificity',detail:'Goals without measurable benchmarks and timeframes are flagged by WISeR. FIM score targets are strongly preferred.',suggestion:'Specify: "Progress from FIM locomotion score of [X] to [Y] within 14 days; modified independence for dressing within 10 days."',citation:'42 CFR §412.622(a)(3)'},
+    {severity:'warning',phrase:'IDT meetings per 42 CFR',title:'IDT Team Composition Not Named',detail:'Listing specific team member names and roles strengthens documentation over a general statement.',suggestion:'Add: "IDT attendees: [Dr. Name] (lead), [RN] (nursing), [SW] (social work), [PT name], [OT name]. Minutes maintained in patient record."',citation:'42 CFR §412.622(a)(5)'}
+  ];
+  return{note:note,flags:flags};
+}
+function demoAppeal(d){
+  var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  return today+'\n\nMedicare Appeals Review Unit\nCMS / Medicare Administrative Contractor\n\nRE: NOTICE OF APPEAL — Request for Redetermination\nPatient: '+(d.pName||'[Patient Name]')+'\nClaim: '+(d.proc||'[Procedure]')+'\nDenial Reason: '+((d.dtype||'').replace(/_/g,' '))+'\n\nDear Medicare Review Officer,\n\nThis letter constitutes a formal request for redetermination pursuant to 42 CFR §405.940. We respectfully appeal the denial of '+(d.proc||'the above-referenced claim')+'.\n\nI. CLINICAL JUSTIFICATION\n\n[PHYSICIAN TO COMPLETE — insert specific clinical findings and medical necessity evidence.]\n\nThis patient satisfies IRF medical necessity under 42 CFR §412.622(a)(3) because:\n\n1. Multiple therapy disciplines actively required — PT and OT at minimum.\n2. Patient demonstrated capacity to tolerate 3+ hours/day of intensive rehabilitation.\n3. Medical complexity requires rehabilitation physician supervision per 42 CFR §412.622(a)(5).\n4. Measurable functional improvement is reasonably expected.\n\nII. REGULATORY BASIS\n\nCoverage is mandated under 42 CFR §412.622(a)(3)(4)(5) and Section 1862(a)(1)(A) of the Social Security Act.\n\nIII. CONCLUSION\n\nWe respectfully request reversal of the denial. All supporting documentation is enclosed.\n\n'+(d.md||'[Physician Name, MD — PM&R]')+'\n[Practice Name] | [Phone] | NPI: [NPI]\n\nEnclosures: Admission note, PT/OT/SLP evaluations, nursing assessment, PAS documentation\n\n━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ DEMO MODE — Add API key for fully AI-drafted appeals';
+}
+
+/* ════════════════════════════════════════════════
+   SUPABASE CONFIG
+   ── Developer: replace these two values ──
+   1. Go to supabase.com → your project → Settings → API
+   2. Copy "Project URL" and "anon public" key
+   3. Paste below
+   ════════════════════════════════════════════════ */
+var SUPABASE_URL  = 'https://nuybyvryvrgomzkcxlnk.supabase.co';
+var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51eWJ5dnJ5dnJnb216a2N4bG5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NTI0MTYsImV4cCI6MjA5ODMyODQxNn0.2tzsWm8o05JiWrTgnP8xL34WOlFUxYrMke0rUoJYNMM';
+
+var supabase = null;
+var currentUser = null;
+
+function initSupabase(){
+  var configured = SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON !== 'YOUR_SUPABASE_ANON_KEY';
+  if(!configured){
+    document.getElementById('config-bar').classList.add('show');
+    hideAuthOverlay();
+    return;
+  }
+  try{
+    var lib = window.supabase;
+    if(!lib || !lib.createClient) throw new Error('Supabase library not loaded');
+    supabase = lib.createClient(SUPABASE_URL, SUPABASE_ANON);
+    supabase.auth.onAuthStateChange(function(event, session){
+      if(session && session.user){
+        currentUser = session.user;
+        setUserUI(session.user);
+        hideAuthOverlay();
+      } else {
+        currentUser = null;
+        showAuthOverlay();
+      }
+    });
+    supabase.auth.getSession().then(function(res){
+      if(res.data && res.data.session){
+        currentUser = res.data.session.user;
+        setUserUI(res.data.session.user);
+        hideAuthOverlay();
+      } else {
+        showAuthOverlay();
+      }
+    });
+  } catch(e){
+    console.error('Supabase init failed:', e);
+    // If Supabase fails to load, still show login screen
+    // but show a notice that auth is unavailable
+    showAuthOverlay();
+    setAuthNotice('⚠️ Authentication service unavailable — please refresh the page.');
+  }
+}
+
+function setUserUI(user){
+  var email = user.email || '';
+  var initials = email.substring(0,2).toUpperCase();
+  var name = (user.user_metadata && user.user_metadata.full_name) ? user.user_metadata.full_name : email;
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-email-display').textContent = name.length > 22 ? name.substring(0,22)+'…' : name;
+  document.getElementById('user-pill').style.display = 'flex';
+}
+
+function hideAuthOverlay(){ document.getElementById('auth-overlay').classList.add('hidden'); }
+function showAuthOverlay(){ document.getElementById('auth-overlay').classList.remove('hidden'); }
+
+function showLogin(){
+  document.getElementById('auth-login-view').style.display='block';
+  document.getElementById('auth-signup-view').style.display='none';
+  document.getElementById('auth-reset-view').style.display='none';
+  setAuthError('');
+}
+function showSignup(){
+  document.getElementById('auth-login-view').style.display='none';
+  document.getElementById('auth-signup-view').style.display='block';
+  document.getElementById('auth-reset-view').style.display='none';
+  setAuthError('');
+}
+function showReset(){
+  document.getElementById('auth-login-view').style.display='none';
+  document.getElementById('auth-signup-view').style.display='none';
+  document.getElementById('auth-reset-view').style.display='block';
+  setAuthError('');
+}
+function setAuthError(msg){
+  var el=document.getElementById('auth-error');
+  if(msg){el.textContent=msg;el.classList.add('show');}
+  else{el.textContent='';el.classList.remove('show');}
+}
+function setAuthNotice(msg){
+  var el=document.getElementById('auth-notice');
+  if(msg){el.textContent=msg;el.style.display='block';}
+  else{el.style.display='none';}
+}
+
+async function doSignIn(){
+  if(!supabase){hideAuthOverlay();return;}
+  var email=document.getElementById('auth-email').value.trim();
+  var pass=document.getElementById('auth-password').value;
+  if(!email||!pass){setAuthError('Please enter your email and password.');return;}
+  var btn=document.getElementById('auth-signin-btn');
+  btn.disabled=true; btn.textContent='Signing in…';
+  setAuthError('');
+  var res = await supabase.auth.signInWithPassword({email:email, password:pass});
+  if(res.error){setAuthError(res.error.message); btn.disabled=false; btn.textContent='Sign In';}
+  // success handled by onAuthStateChange
+}
+
+async function doSignUp(){
+  if(!supabase){hideAuthOverlay();return;}
+  var name=document.getElementById('auth-fullname').value.trim();
+  var email=document.getElementById('auth-email-signup').value.trim();
+  var pass=document.getElementById('auth-password-signup').value;
+  if(!name||!email||!pass){setAuthError('Please fill in all fields.');return;}
+  if(pass.length<8){setAuthError('Password must be at least 8 characters.');return;}
+  var btn=document.getElementById('auth-signup-btn');
+  btn.disabled=true; btn.textContent='Creating account…';
+  setAuthError('');
+  var res = await supabase.auth.signUp({email:email, password:pass, options:{data:{full_name:name}}});
+  if(res.error){setAuthError(res.error.message); btn.disabled=false; btn.textContent='Create Account';}
+  else{setAuthNotice('✅ Check your email to confirm your account, then sign in.'); showLogin();}
+}
+
+async function doReset(){
+  if(!supabase){return;}
+  var email=document.getElementById('auth-email-reset').value.trim();
+  if(!email){setAuthError('Please enter your email.');return;}
+  var res = await supabase.auth.resetPasswordForEmail(email);
+  if(res.error){setAuthError(res.error.message);}
+  else{setAuthNotice('✅ Password reset email sent. Check your inbox.'); showLogin();}
+}
+
+async function doSignOut(){
+  if(!supabase){return;}
+  await supabase.auth.signOut();
+  currentUser = null;
+  document.getElementById('user-pill').style.display='none';
+  showAuthOverlay();
+}
+
+/* ── AUDIT LOG HELPER — wraps saveLog to include user ── */
+function saveOutcomeWithAudit(entry){
+  if(currentUser){
+    entry.user_email = currentUser.email;
+    entry.user_id    = currentUser.id;
+    entry.user_name  = (currentUser.user_metadata && currentUser.user_metadata.full_name) || currentUser.email;
+  }
+  return entry;
+}
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded',function(){
+  tooltip=document.getElementById('flag-tooltip');
+  document.addEventListener('mousemove',function(e){if(tooltip&&tooltip.classList.contains('visible'))posTip(e);});
+  document.addEventListener('mouseout',function(e){if(!e.target.classList.contains('flag-amber')&&!e.target.classList.contains('flag-red'))hideTip();});
+  // Give Supabase CDN script time to load before initializing
+  setTimeout(function(){ initSupabase(); }, 800);
+  renderDash();
+});
+</script>
+</body>
+</html>
