@@ -562,6 +562,7 @@ tr:hover td{background:var(--slate-faint);}
         <button class="extract-btn" id="extract-btn" onclick="extractPatientInfo()">
           ✨ Extract Patient Info from Documents
         </button>
+        <div id="extract-error" style="display:none;color:var(--red);font-size:11.5px;margin-top:-8px;margin-bottom:12px;text-align:center;"></div>
 
         <!-- EXTRACTED SUMMARY CARD -->
         <div class="extracted-card" id="extracted-card">
@@ -713,7 +714,7 @@ tr:hover td{background:var(--slate-faint);}
   <div class="page" id="page-outcomes">
     <div class="page-header"><h1>Outcome Log</h1><p>Every tracked submission builds your payer intelligence database.</p></div>
     <div class="log-wrap">
-      <div class="log-hdr"><div class="log-title">📋 Submission History</div><button class="btn btn-ghost btn-sm" onclick="clearLog()" style="color:var(--red);">🗑 Clear All</button></div>
+      <div class="log-hdr"><div class="log-title">📋 Your Submission History</div><button class="btn btn-ghost btn-sm" onclick="clearLog()" style="color:var(--red);">🗑 Clear My Entries</button></div>
       <div id="log-body"><div class="empty-log"><div style="font-size:28px;margin-bottom:8px;opacity:0.3;">📋</div>No outcomes logged yet. Generate a note and track the submission outcome to start building your payer intelligence database.</div></div>
     </div>
   </div>
@@ -746,6 +747,40 @@ tr:hover td{background:var(--slate-faint);}
 <div class="toast" id="toast"></div>
 
 <script>
+/* ── AUTHENTICATED API CALLS ── */
+async function authedFetch(body){
+  var sessionRes = await supabase.auth.getSession();
+  var token = sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token;
+  if(!token) throw {code:'auth_required', message:'Your session expired — please sign in again.'};
+  var res = await fetch('/api/generate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+    body:JSON.stringify(body)
+  });
+  if(!res.ok){
+    var errBody=null;
+    try{ errBody=await res.json(); }catch(e){}
+    throw {code:(errBody&&errBody.error)||('http_'+res.status), message:(errBody&&errBody.message)||('Request failed ('+res.status+').')};
+  }
+  return res;
+}
+function errorMessage(err){
+  if(err&&err.code==='rate_limited') return err.message||"You've reached the hourly generation limit. Please wait and try again.";
+  if(err&&err.code==='auth_required') return err.message||'Your session expired. Please refresh and sign in again.';
+  if(err&&err.message) return err.message;
+  return 'Something went wrong. Please try again.';
+}
+function showGenerationError(targetId,err){
+  var msg=errorMessage(err);
+  document.getElementById(targetId).innerHTML=
+    '<div style="text-align:center;padding:40px 20px;">'
+    +'<div style="font-size:32px;margin-bottom:10px;">⚠️</div>'
+    +'<div style="font-size:14px;font-weight:600;color:var(--red);margin-bottom:6px;">Generation failed</div>'
+    +'<div style="font-size:12.5px;color:var(--slate);max-width:360px;margin:0 auto;">'+esc(msg)+'</div>'
+    +'</div>';
+  toast(msg,'❌');
+}
+
 /* ── STATE ── */
 var selInsurer    = 'Medicare Traditional';
 var caseData      = null;
@@ -955,28 +990,19 @@ async function extractPatientInfo(){
   btn.disabled=true; btn.textContent='⏳ Extracting patient info...';
   var sys='You are a medical records specialist. Extract structured patient information from the provided clinical documents. Return ONLY valid JSON, no markdown or backticks. If a field cannot be found in the documents, use null — do NOT guess or fabricate. Schema: {"name":"Last, First MI or null","dob":"MM/DD/YYYY or null","mbi":"Medicare Beneficiary Identifier or null","admit_date":"MM/DD/YYYY or null","primary_dx":"full diagnosis or null","icd10":"ICD-10 code or null","los_estimate":"estimated length of stay or null","comorbidities":"comma-separated list or null","plof":"prior level of function description or null","discharge_destination":"anticipated destination or null","attending_physician":"Dr Name credentials or null","confidence":"high|medium|low","missing_fields":["array of field names not found"]}';
   var usr='Extract patient information from these clinical documents:\n\n'+getAllDocText().substring(0,6000);
+  var errEl=document.getElementById('extract-error');
+  errEl.style.display='none';
   try{
-    var res=await fetch('/api/generate',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,system:sys,messages:[{role:'user',content:usr}]})
-    });
-    if(!res.ok) throw new Error('api_'+res.status);
+    var res=await authedFetch({action:'extract_info',model:'claude-sonnet-4-6',max_tokens:800,system:sys,messages:[{role:'user',content:usr}]});
     var data=await res.json();
     var raw=(data.content&&data.content[0])?data.content[0].text:'';
     var info=JSON.parse(raw.replace(/```json|```/g,'').trim());
     extractedInfo=info; populateExtracted(info); toast('Patient info extracted','✅');
   } catch(err){
-    var demo={name:'[Demo] Smith, John R.',dob:'01/15/1947',mbi:'1EG4-TE5-MK72',
-      admit_date:new Date().toLocaleDateString('en-US'),
-      primary_dx:'Right hemiplegia following ischemic stroke',icd10:'I69.351',
-      los_estimate:'14–21 days',
-      comorbidities:'Hypertension, Type 2 Diabetes Mellitus, Atrial Fibrillation',
-      plof:'Independent ambulation and ADLs prior to acute event',
-      discharge_destination:'Home with home health services',
-      attending_physician:'[Demo] Dr. James Williams, MD — PM&R',
-      confidence:'high',missing_fields:[]};
-    extractedInfo=demo; populateExtracted(demo);
-    toast('Demo extraction — add API key for live AI','ℹ️');
+    console.error('Extraction error:', err);
+    var msg=errorMessage(err);
+    errEl.textContent='⚠️ '+msg; errEl.style.display='block';
+    toast(msg,'❌');
   } finally{
     btn.disabled=false; btn.textContent='✨ Extract Patient Info from Documents';
   }
@@ -1098,6 +1124,10 @@ async function generateNote(){
   var usr='INSURER: '+d.insurer+'\n\nPATIENT INFO (extracted from documents):\nName: '+d.name+'\nDOB: '+d.dob+'\nMBI: '+d.mbi+'\nAdmission Date: '+d.admit+'\nPrimary Dx: '+d.dx+' | ICD-10: '+d.icd+'\nEst. LOS: '+d.los+'\nComorbidities: '+d.comorbid+'\nPrior Level of Function: '+d.plof+'\nAnticipated Discharge: '+d.discharge+'\nAttending: '+d.md+'\n\n--- PHYSICIAN / MEDICAL NOTES ---\n'+d.mdDoc+'\n\n--- NURSING NOTES ---\n'+d.nurseDoc+'\n\n--- PHYSICAL THERAPY EVALUATION ---\n'+d.ptDoc+'\n\n--- OCCUPATIONAL THERAPY EVALUATION ---\n'+d.otDoc+'\n\n--- SPEECH-LANGUAGE PATHOLOGY ---\n'+d.slpDoc;
 
   try{
+    /* ── PAYER INTELLIGENCE: pull distilled cross-user learnings (aggregates only, no raw records) ── */
+    document.getElementById('stream-msg').textContent='Loading payer intelligence...';
+    var payerInsight=await getPayerInsightText(d.insurer);
+
     /* ── PRE-SUMMARIZATION: Condense each section before note generation ── */
     document.getElementById('stream-msg').textContent='Reading clinical documents...';
     sb.classList.add('on');
@@ -1108,15 +1138,13 @@ async function generateNote(){
       if(!text||text.trim().length<50) return text;
       if(text.trim().length<800) return text; // short enough, no need to summarize
       try{
-        var r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,
+        var r=await authedFetch({action:'note_summarize',model:'claude-sonnet-4-6',max_tokens:2000,
             system:sumSys,
-            messages:[{role:'user',content:'Summarize this '+label+' documentation, preserving all clinical details:\n\n'+text.substring(0,40000)}]})});
-        if(!r.ok) return text; // fallback to original if fails
+            messages:[{role:'user',content:'Summarize this '+label+' documentation, preserving all clinical details:\n\n'+text.substring(0,40000)}]});
         var sd=await r.json();
         var st=(sd.content&&sd.content[0])?sd.content[0].text:'';
         return st||text;
-      }catch(e){ return text; } // fallback
+      }catch(e){ return text; } // fallback to unsummarized text — not a fatal error
     }
 
     /* Summarize all sections in parallel */
@@ -1135,13 +1163,9 @@ async function generateNote(){
 
     /* ── CALL 2: Generate note as plain text via streaming ── */
     document.getElementById('stream-msg').textContent='Generating admission note...';
-    var noteSys='You are a Medicare IRF documentation specialist. Insurer: '+d.insurer+'. Synthesize the provided clinical evaluations into a complete, physician-ready IRF admission note.\n\nRules:\n1. Use ONLY information present in the provided documents. Never fabricate or hallucinate clinical details.\n2. Where critical Medicare information is MISSING (e.g. FIM scores, therapy tolerance evidence, qualifying condition, physician certification, SLP evaluation), include a clearly marked placeholder: [REQUIRED: description of what is missing and why it is required for IRF approval and Medicare compliance].\n3. If an entire section has no documentation, include: [MISSING: section name — upload documentation to complete this section].\n4. DO NOT include a Pre-Admission Screening (PAS) section — this is handled separately and should not appear in the generated note.\n5. DO include these sections in order: Patient Demographics, Qualifying Acute Hospital Stay, Primary Diagnosis, Comorbid Conditions, Allergies, Prior Level of Function, History of Present Illness, Relevant Laboratory and Diagnostic Data, Nursing Assessment, Physical Therapy Evaluation, Occupational Therapy Evaluation, Speech-Language Pathology, Medical Necessity Statement, Current Medications, Plan of Care, Physician Certification.\n6. For the Relevant Laboratory and Diagnostic Data section: format all lab values as a plain-text table with dates as columns and lab tests as rows so trends are easy to read. Use dashes and pipes to create the table structure.\n7. Write in professional clinical documentation style suitable for physician review and signature.\n8. Be thorough and complete — do not truncate any section. Include all clinically relevant details from the provided summaries.\n9. Output plain text only — no JSON, no markdown headers, no bullet points.';
+    var noteSys='You are a Medicare IRF documentation specialist. Insurer: '+d.insurer+'. Synthesize the provided clinical evaluations into a complete, physician-ready IRF admission note.\n\nRules:\n1. Use ONLY information present in the provided documents. Never fabricate or hallucinate clinical details.\n2. Where critical Medicare information is MISSING (e.g. FIM scores, therapy tolerance evidence, qualifying condition, physician certification, SLP evaluation), include a clearly marked placeholder: [REQUIRED: description of what is missing and why it is required for IRF approval and Medicare compliance].\n3. If an entire section has no documentation, include: [MISSING: section name — upload documentation to complete this section].\n4. DO NOT include a Pre-Admission Screening (PAS) section — this is handled separately and should not appear in the generated note.\n5. DO include these sections in order: Patient Demographics, Qualifying Acute Hospital Stay, Primary Diagnosis, Comorbid Conditions, Allergies, Prior Level of Function, History of Present Illness, Relevant Laboratory and Diagnostic Data, Nursing Assessment, Physical Therapy Evaluation, Occupational Therapy Evaluation, Speech-Language Pathology, Medical Necessity Statement, Current Medications, Plan of Care, Physician Certification.\n6. For the Relevant Laboratory and Diagnostic Data section: format all lab values as a plain-text table with dates as columns and lab tests as rows so trends are easy to read. Use dashes and pipes to create the table structure.\n7. Write in professional clinical documentation style suitable for physician review and signature.\n8. Be thorough and complete — do not truncate any section. Include all clinically relevant details from the provided summaries.\n9. Output plain text only — no JSON, no markdown headers, no bullet points.'+(payerInsight?'\n\n'+payerInsight+'\n\nProactively strengthen documentation in the areas above that have historically caused denials for this payer, wherever the source documents support doing so.':'');
 
-    var res1=await fetch('/api/generate',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:16000,stream:true,system:noteSys,messages:[{role:'user',content:usrSum}]})
-    });
-    if(!res1.ok) throw new Error('api_'+res1.status);
+    var res1=await authedFetch({action:'note_generate',model:'claude-sonnet-4-6',max_tokens:16000,stream:true,system:noteSys,messages:[{role:'user',content:usrSum}]});
     var reader=res1.body.getReader(),dec=new TextDecoder(),noteText='';
     var nb=document.getElementById('note-body');
     nb.innerHTML='';
@@ -1156,28 +1180,29 @@ async function generateNote(){
         try{var p=JSON.parse(ds);if(p.type==='content_block_delta'&&p.delta&&p.delta.type==='text_delta'){noteText+=p.delta.text;nb.textContent=noteText;}}catch(e){}
       }
     }
+    if(!noteText) throw {code:'empty_response',message:'The AI returned an empty note. Please try again.'};
 
     /* ── CALL 3: Gap screening against full generated note ── */
     document.getElementById('stream-msg').textContent='Screening for documentation gaps...';
-    var flagSys='You are a ruthlessly thorough Medicare IRF compliance auditor. Your job is to identify documentation gaps that WILL cause a denial by WISeR AI, Medicare Administrative Contractors, or Medicare Advantage payers.\n\nYou are checking against these specific denial triggers:\n\nCRITICAL MEDICARE IRF CRITERIA (42 CFR §412.622):\n1. PAS (Preadmission Screening) — must document EXACT date and time, must be within 48 hours of admission, must be conducted by a licensed clinician identified by name and credentials\n2. Therapy tolerance — must cite SPECIFIC observed evidence (e.g. minutes tolerated, functional activity performed), NOT just assertion of tolerance\n3. 3-hour rule — must explicitly state patient can tolerate AND benefit from minimum 3 hours/day, 5 days/week. Generic statements are insufficient\n4. Qualifying condition — must explicitly name one of the 13 CMS qualifying conditions (stroke, TBI, spinal cord injury, hip fracture, etc.)\n5. Medical complexity — must explain WHY IRF is required over SNF: specific physician supervision needs, nursing intensity, or complexity that cannot be managed at lower level of care\n6. Functional goals — must be SPECIFIC and MEASURABLE with timeframes. FIM score targets strongly preferred. Vague goals like "improve mobility" are denial triggers\n7. Prior Level of Function (PLOF) — must be explicitly documented with functional baseline BEFORE the acute event\n8. IDT (Interdisciplinary Team) — must name specific disciplines, meeting frequency, and that physician leads. Generic IDT statements are insufficient\n9. Plan of Care — must include specific therapy disciplines, frequency, intensity, and estimated duration\n10. Physician certification — must be present with attending physician name, credentials, and signature block\n\nWISeR AI SPECIFIC TRIGGERS:\n- Missing or non-specific FIM scores (WISeR uses FIM to validate medical necessity)\n- PAS not documented within 48-hour window with exact timestamp\n- Therapy tolerance stated without observed functional evidence\n- Goals without measurable benchmarks or timeframes\n- Missing rehabilitation potential statement\n- Comorbidities listed without explaining how they increase medical complexity\n\nMA PAYER ADDITIONAL REQUIREMENTS:\n- UHC MA: requires explicit statement of expected functional improvement percentage\n- Humana MA: requires documentation that conservative treatment was attempted or contraindicated\n- Aetna MA: requires explicit functional prognosis statement from attending physician\n- Anthem/BCBS: requires documented caregiver training plan for discharge\n- All MA plans: prior authorization reference number should be documented\n\nINSTRUCTIONS:\n- Be highly critical. If something is vague, generic, or missing specifics, flag it.\n- Only flag things that a real payer would use to deny the claim.\n- For each flag, cite the EXACT phrase from the note that is problematic or missing.\n- Return ONLY valid JSON, no markdown, no preamble.\n\nSchema: {"flags":[{"severity":"critical|warning","phrase":"<exact substring from note, max 8 words, or [MISSING] if absent>","title":"<specific gap name>","detail":"<exactly why this will cause denial>","suggestion":"<specific replacement language to add>","citation":"<42 CFR section or payer policy>"}]}\n\ncritical = payer will likely deny without this\nwarning = payer may question or request additional documentation\nReturn between 4 and 8 flags. If the note is genuinely complete, return the 4 most important strengthening opportunities.';
+    var flagSys='You are a ruthlessly thorough Medicare IRF compliance auditor. Your job is to identify documentation gaps that WILL cause a denial by WISeR AI, Medicare Administrative Contractors, or Medicare Advantage payers.\n\nYou are checking against these specific denial triggers:\n\nCRITICAL MEDICARE IRF CRITERIA (42 CFR §412.622):\n1. PAS (Preadmission Screening) — must document EXACT date and time, must be within 48 hours of admission, must be conducted by a licensed clinician identified by name and credentials\n2. Therapy tolerance — must cite SPECIFIC observed evidence (e.g. minutes tolerated, functional activity performed), NOT just assertion of tolerance\n3. 3-hour rule — must explicitly state patient can tolerate AND benefit from minimum 3 hours/day, 5 days/week. Generic statements are insufficient\n4. Qualifying condition — must explicitly name one of the 13 CMS qualifying conditions (stroke, TBI, spinal cord injury, hip fracture, etc.)\n5. Medical complexity — must explain WHY IRF is required over SNF: specific physician supervision needs, nursing intensity, or complexity that cannot be managed at lower level of care\n6. Functional goals — must be SPECIFIC and MEASURABLE with timeframes. FIM score targets strongly preferred. Vague goals like "improve mobility" are denial triggers\n7. Prior Level of Function (PLOF) — must be explicitly documented with functional baseline BEFORE the acute event\n8. IDT (Interdisciplinary Team) — must name specific disciplines, meeting frequency, and that physician leads. Generic IDT statements are insufficient\n9. Plan of Care — must include specific therapy disciplines, frequency, intensity, and estimated duration\n10. Physician certification — must be present with attending physician name, credentials, and signature block\n\nWISeR AI SPECIFIC TRIGGERS:\n- Missing or non-specific FIM scores (WISeR uses FIM to validate medical necessity)\n- PAS not documented within 48-hour window with exact timestamp\n- Therapy tolerance stated without observed functional evidence\n- Goals without measurable benchmarks or timeframes\n- Missing rehabilitation potential statement\n- Comorbidities listed without explaining how they increase medical complexity\n\nMA PAYER ADDITIONAL REQUIREMENTS:\n- UHC MA: requires explicit statement of expected functional improvement percentage\n- Humana MA: requires documentation that conservative treatment was attempted or contraindicated\n- Aetna MA: requires explicit functional prognosis statement from attending physician\n- Anthem/BCBS: requires documented caregiver training plan for discharge\n- All MA plans: prior authorization reference number should be documented\n\nINSTRUCTIONS:\n- Be highly critical. If something is vague, generic, or missing specifics, flag it.\n- Only flag things that a real payer would use to deny the claim.\n- For each flag, cite the EXACT phrase from the note that is problematic or missing.\n- Return ONLY valid JSON, no markdown, no preamble.\n\nSchema: {"flags":[{"severity":"critical|warning","phrase":"<exact substring from note, max 8 words, or [MISSING] if absent>","title":"<specific gap name>","detail":"<exactly why this will cause denial>","suggestion":"<specific replacement language to add>","citation":"<42 CFR section or payer policy>"}]}\n\ncritical = payer will likely deny without this\nwarning = payer may question or request additional documentation\nReturn between 4 and 8 flags. If the note is genuinely complete, return the 4 most important strengthening opportunities.'+(payerInsight?'\n\n'+payerInsight:'');
     var flagUsr='INSURER: '+d.insurer+'\n\nReview this IRF admission note for documentation gaps:\n\n'+noteText;
-    var res2=await fetch('/api/generate',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,system:flagSys,messages:[{role:'user',content:flagUsr}]})
-    });
-    sb.classList.remove('on');
     var flags=[];
-    if(res2.ok){
+    try{
+      var res2=await authedFetch({action:'note_flags',model:'claude-sonnet-4-6',max_tokens:2000,system:flagSys,messages:[{role:'user',content:flagUsr}]});
       var fdata=await res2.json();
       var fraw=(fdata.content&&fdata.content[0])?fdata.content[0].text:'';
-      try{var fresult=JSON.parse(fraw.replace(/```json|```/g,'').trim());flags=fresult.flags||[];}catch(e){console.warn('Flag parse error:',e);}
+      var fresult=JSON.parse(fraw.replace(/```json|```/g,'').trim());
+      flags=fresult.flags||[];
+    }catch(e){
+      console.warn('Gap screening failed — note was generated successfully, showing it without gap flags:',e);
+      toast('Note generated, but gap screening failed — review manually','⚠️');
     }
+    sb.classList.remove('on');
     renderNote(noteText,flags)
   } catch(err){
     sb.classList.remove('on');
     console.error('ClearPath generation error:', err);
-    toast('Error: '+err.message,'❌');
-    var demo=demoNote(d); renderNote(demo.note,demo.flags);
+    showGenerationError('note-body', err);
   } finally{
     btn.disabled=false; btn.textContent='✨ Generate Note + Screen for Gaps';
   }
@@ -1270,43 +1295,108 @@ function setOutcome(el,o){
   document.querySelectorAll('.outcome-btn').forEach(function(b){b.classList.remove('sel');});
   el.classList.add('sel'); selOutcome=o;
 }
-function saveOutcome(){
+async function saveOutcome(){
   if(!selOutcome){toast('Please select an outcome first','⚠️');return;}
   if(!caseData){toast('Generate a note first','⚠️');return;}
-  var log=getLog();
-  var entry={id:Date.now(),timestamp:caseData.timestamp,patient:caseData.name||'[Patient]',
-    insurer:caseData.insurer||'Unknown',dx:caseData.dx||'[Dx]',icd:caseData.icd||'',
-    outcome:selOutcome,notes:gv('outcome-notes'),flagCount:caseFlags.length,
-    criticalFlags:caseFlags.filter(function(f){return f.severity==='critical';}).length};
-  entry=saveOutcomeWithAudit(entry);
-  log.push(entry);
-  saveLog(log); toast('Outcome saved ✅');
+  if(!supabase||!currentUser){toast('Sign in required to save outcomes','⚠️');return;}
+  var critTitles=caseFlags.filter(function(f){return f.severity==='critical';}).map(function(f){return f.title;}).filter(Boolean).slice(0,8);
+  var row={
+    user_id:currentUser.id,
+    user_email:currentUser.email,
+    user_name:(currentUser.user_metadata&&currentUser.user_metadata.full_name)||currentUser.email,
+    patient:caseData.name||'[Patient]',
+    insurer:caseData.insurer||'Unknown',
+    dx:caseData.dx||'[Dx]',
+    icd:caseData.icd||'',
+    outcome:selOutcome,
+    notes:gv('outcome-notes'),
+    flag_count:caseFlags.length,
+    critical_flags:caseFlags.filter(function(f){return f.severity==='critical';}).length,
+    flag_titles:critTitles
+  };
+  try{
+    var ins=await supabase.from('outcomes').insert(row);
+    if(ins.error) throw ins.error;
+    outcomeCache=null;
+    toast('Outcome saved ✅');
+  }catch(e){
+    console.error('Failed to save outcome:',e);
+    toast('Could not save outcome','❌');
+  }
   document.getElementById('outcome-tracker').style.display='none';
   selOutcome=null;
   document.querySelectorAll('.outcome-btn').forEach(function(b){b.classList.remove('sel');});
   document.getElementById('outcome-notes').value='';
   renderDash();
 }
-function getLog(){try{return JSON.parse(localStorage.getItem('cp_outcomes')||'[]');}catch(e){return[];}}
-function saveLog(l){try{localStorage.setItem('cp_outcomes',JSON.stringify(l));}catch(e){}}
-function clearLog(){
-  if(!confirm('Clear all outcome data? This cannot be undone.')) return;
-  localStorage.removeItem('cp_outcomes'); renderLog(); renderDash(); toast('Log cleared','🗑️');
+
+/* ── OUTCOME STORAGE (Supabase — each user sees only their OWN rows; cross-user
+   learning happens only through the aggregate RPC functions below, which never
+   expose another user's raw records) ── */
+var outcomeCache=null;
+async function getMyLog(){
+  if(outcomeCache) return outcomeCache;
+  if(!supabase||!currentUser){ return []; }
+  try{
+    var res=await supabase.from('outcomes').select('*').order('created_at',{ascending:true}).limit(500);
+    if(res.error) throw res.error;
+    outcomeCache=(res.data||[]).map(function(r){
+      return {timestamp:r.created_at,patient:r.patient,insurer:r.insurer,dx:r.dx,icd:r.icd,
+        outcome:r.outcome,notes:r.notes,flagCount:r.flag_count,criticalFlags:r.critical_flags,
+        flagTitles:r.flag_titles||[]};
+    });
+  }catch(e){ console.error('Failed to load outcomes:',e); outcomeCache=[]; }
+  return outcomeCache;
+}
+async function clearLog(){
+  if(!confirm('Delete YOUR logged outcomes? This cannot be undone. (Entries logged by teammates are not affected.)')) return;
+  if(!supabase||!currentUser){ toast('Sign in required','⚠️'); return; }
+  try{
+    var del=await supabase.from('outcomes').delete().eq('user_id',currentUser.id);
+    if(del.error) throw del.error;
+    outcomeCache=null;
+    renderLog(); renderDash();
+    toast('Your entries cleared','🗑️');
+  }catch(e){ console.error(e); toast('Could not clear entries','❌'); }
 }
 
-/* ── LOG ── */
-function renderLog(){
-  var log=getLog().reverse(); var body=document.getElementById('log-body');
+/* Cross-user aggregate lookups — Postgres functions return statistics only,
+   never another user's raw patient/outcome rows. */
+async function getPayerInsightText(insurer){
+  if(!supabase||!currentUser||!insurer) return '';
+  try{
+    var res=await supabase.rpc('payer_insight',{insurer_filter:insurer});
+    if(res.error) throw res.error;
+    var row=res.data&&res.data[0];
+    if(!row||row.sample_size<3) return '';
+    var lines=['PAYER INTELLIGENCE (from '+row.sample_size+' prior submissions across your organization):'];
+    if(row.approval_rate!==null) lines.push('- Historical approval rate: '+row.approval_rate+'% ('+row.approved+' approved, '+row.denied+' denied).');
+    if(row.top_gap_titles&&row.top_gap_titles.length) lines.push('- Gaps most often present in past DENIED submissions: '+row.top_gap_titles.join('; ')+'. Prioritize addressing these.');
+    return lines.length>1?lines.join('\n'):'';
+  }catch(e){ console.warn('payer_insight lookup failed:',e); return ''; }
+}
+async function getOrgStats(){
+  if(!supabase||!currentUser) return null;
+  try{
+    var res=await supabase.rpc('org_stats');
+    if(res.error) throw res.error;
+    return res.data&&res.data[0];
+  }catch(e){ console.warn('org_stats lookup failed:',e); return null; }
+}
+
+/* ── LOG (private — signed-in user's own submissions only) ── */
+async function renderLog(){
+  var log=(await getMyLog()).slice().reverse(); var body=document.getElementById('log-body');
   if(!log.length){body.innerHTML='<div class="empty-log"><div style="font-size:28px;margin-bottom:8px;opacity:0.3;">📋</div>No outcomes logged yet.</div>';return;}
   var lbl={approved:'✓ Approved',denied:'✗ Denied',pending:'⏳ Pending',appealed:'↩ Appealed'};
-  body.innerHTML='<table><thead><tr><th>Date</th><th>Submitted By</th><th>Patient</th><th>Insurer</th><th>Diagnosis</th><th>Outcome</th><th>Crit. Flags</th><th>Notes</th></tr></thead><tbody>'
-    +log.map(function(e){return'<tr><td>'+new Date(e.timestamp).toLocaleDateString()+'<br><span class="audit-meta">'+new Date(e.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span></td><td style="font-size:11.5px;">'+(e.user_name||e.user_email||'<span style="color:var(--slate-light)">—</span>')+'</td><td>'+(e.patient||'—')+'</td><td style="font-size:11.5px;">'+(e.insurer||'—')+'</td><td style="font-size:11.5px;">'+(e.dx||'—')+'</td><td><span class="obadge '+e.outcome+'">'+(lbl[e.outcome]||e.outcome)+'</span></td><td style="text-align:center;">'+(e.criticalFlags>0?'<span style="color:var(--red);font-weight:600;">'+e.criticalFlags+' ❌</span>':'<span style="color:var(--green);">0 ✓</span>')+'</td><td style="font-size:11.5px;color:var(--slate);">'+(e.notes||'—')+'</td></tr>';}).join('')
+  body.innerHTML='<table><thead><tr><th>Date</th><th>Patient</th><th>Insurer</th><th>Diagnosis</th><th>Outcome</th><th>Crit. Flags</th><th>Notes</th></tr></thead><tbody>'
+    +log.map(function(e){return'<tr><td>'+new Date(e.timestamp).toLocaleDateString()+'<br><span class="audit-meta">'+new Date(e.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span></td><td>'+(e.patient||'—')+'</td><td style="font-size:11.5px;">'+(e.insurer||'—')+'</td><td style="font-size:11.5px;">'+(e.dx||'—')+'</td><td><span class="obadge '+e.outcome+'">'+(lbl[e.outcome]||e.outcome)+'</span></td><td style="text-align:center;">'+(e.criticalFlags>0?'<span style="color:var(--red);font-weight:600;">'+e.criticalFlags+' ❌</span>':'<span style="color:var(--green);">0 ✓</span>')+'</td><td style="font-size:11.5px;color:var(--slate);">'+(e.notes||'—')+'</td></tr>';}).join('')
     +'</tbody></table>';
 }
 
-/* ── DASHBOARD ── */
-function renderDash(){
-  var log=getLog();
+/* ── DASHBOARD (top stat cards = your own cases; intelligence panel = org-wide aggregate) ── */
+async function renderDash(){
+  var log=await getMyLog();
   var app=log.filter(function(e){return e.outcome==='approved';}).length;
   var den=log.filter(function(e){return e.outcome==='denied';}).length;
   var pend=log.filter(function(e){return e.outcome==='pending';}).length;
@@ -1316,51 +1406,53 @@ function renderDash(){
   document.getElementById('ds-rate-sub').textContent=rate!==null?app+' approved of '+dec+' decided':'log outcomes to track';
   document.getElementById('ds-pending').textContent=pend;
   document.getElementById('ds-risk').textContent='$'+(den*1000).toLocaleString();
-  document.getElementById('dash-pat-count').textContent=log.length+' case'+(log.length!==1?'s':'')+' logged';
+
+  var stats=await getOrgStats();
   var pb=document.getElementById('dash-pat-body');
-  if(log.length<5){pb.innerHTML='<div class="pat-empty"><div class="pat-empty-icon">📈</div><div class="pat-empty-title">Your outcomes database is building.</div><div class="pat-empty-text">'+log.length+'/10 cases logged. Patterns surface once you have 10+ outcomes tracked.</div></div>';}
-  else{pb.innerHTML=buildInsights(log);}
+  var total=stats?stats.total_cases:0;
+  document.getElementById('dash-pat-count').textContent=total+' case'+(total!==1?'s':'')+' logged organization-wide';
+  if(!stats||total<5){pb.innerHTML='<div class="pat-empty"><div class="pat-empty-icon">📈</div><div class="pat-empty-title">Your outcomes database is building.</div><div class="pat-empty-text">'+total+'/10 cases logged across your organization. Patterns surface once you have 10+ outcomes tracked.</div></div>';}
+  else{pb.innerHTML=buildOrgInsights(stats);}
 }
 
-/* ── PATTERNS ── */
-function renderPatterns(){
-  var log=getLog(); document.getElementById('p-total').textContent=log.length;
-  document.getElementById('pat-count').textContent=log.length+' cases';
-  var ps={};
-  log.forEach(function(e){if(!ps[e.insurer])ps[e.insurer]={a:0,d:0,t:0};ps[e.insurer].t++;if(e.outcome==='approved')ps[e.insurer].a++;if(e.outcome==='denied')ps[e.insurer].d++;});
-  var arr=Object.keys(ps).map(function(n){var s=ps[n];return{name:n,a:s.a,d:s.d,t:s.t,rate:(s.a+s.d>0)?Math.round(s.a/(s.a+s.d)*100):null};});
-  var tv=arr.slice().sort(function(a,b){return b.t-a.t;})[0];
-  var wr=arr.filter(function(p){return p.rate!==null;});
+/* ── PATTERNS (org-wide aggregate — no individual patient data crosses accounts) ── */
+async function renderPatterns(){
+  var stats=await getOrgStats();
+  var total=stats?stats.total_cases:0;
+  document.getElementById('p-total').textContent=total;
+  document.getElementById('pat-count').textContent=total+' cases';
+  var byInsurer=(stats&&stats.by_insurer)||{};
+  var arr=Object.keys(byInsurer).map(function(n){var s=byInsurer[n];return{name:n,total:s.total,rate:s.rate};});
+  var tv=arr.slice().sort(function(a,b){return b.total-a.total;})[0];
+  var wr=arr.filter(function(p){return p.rate!==null&&p.rate!==undefined;});
   var best=wr.slice().sort(function(a,b){return b.rate-a.rate;})[0];
   var worst=wr.slice().sort(function(a,b){return a.rate-b.rate;})[0];
   document.getElementById('p-top').textContent=tv?tv.name.split(' ')[0]:'—';
-  document.getElementById('p-top-sub').textContent=tv?tv.t+' cases':'no data yet';
+  document.getElementById('p-top-sub').textContent=tv?tv.total+' cases':'no data yet';
   document.getElementById('p-best').textContent=best?best.rate+'%':'—';
   document.getElementById('p-best-sub').textContent=best?best.name.substring(0,22):'no data yet';
   document.getElementById('p-worst').textContent=worst?worst.rate+'%':'—';
   document.getElementById('p-worst-sub').textContent=worst?worst.name.substring(0,22):'no data yet';
   var body=document.getElementById('pat-body');
-  if(log.length<10){body.innerHTML='<div class="pat-empty"><div class="pat-empty-icon">🧠</div><div class="pat-empty-title">Keep logging — '+(10-log.length)+' more case'+(10-log.length!==1?'s':'')+' needed.</div><div class="pat-empty-text">At 10 cases you will see payer behavior signals.</div></div>';}
-  else{body.innerHTML=buildInsights(log);}
+  if(!stats||total<10){body.innerHTML='<div class="pat-empty"><div class="pat-empty-icon">🧠</div><div class="pat-empty-title">Keep logging — '+(10-total)+' more case'+(10-total!==1?'s':'')+' needed.</div><div class="pat-empty-text">At 10 cases you will see payer behavior signals.</div></div>';}
+  else{body.innerHTML=buildOrgInsights(stats);}
 }
-function buildInsights(log){
+function buildOrgInsights(stats){
   var ins=[];
-  var app=log.filter(function(e){return e.outcome==='approved';});
-  var den=log.filter(function(e){return e.outcome==='denied';});
-  var lfa=app.filter(function(e){return e.criticalFlags===0;}).length;
-  var hfd=den.filter(function(e){return e.criticalFlags>0;}).length;
-  if(app.length>0&&lfa/app.length>0.6) ins.push({icon:'✅',text:'<strong>'+Math.round(lfa/app.length*100)+'% of approved cases</strong> had zero critical documentation flags. Clean documentation strongly correlates with approval.',meta:'Based on '+app.length+' approved cases'});
-  if(den.length>0&&hfd/den.length>0.5) ins.push({icon:'⚠️',text:'<strong>'+Math.round(hfd/den.length*100)+'% of denied cases</strong> had at least one critical flag. Addressing gaps before submission could prevent these denials.',meta:'Based on '+den.length+' denied cases'});
-  var pg={};
-  log.forEach(function(e){if(!pg[e.insurer])pg[e.insurer]=[];pg[e.insurer].push(e);});
-  Object.keys(pg).forEach(function(p){
-    var c=pg[p];if(c.length<3) return;
-    var a=c.filter(function(x){return x.outcome==='approved';}).length;
-    var d=c.filter(function(x){return x.outcome==='denied';}).length;
-    if(a+d===0) return;
-    var r=Math.round(a/(a+d)*100);
-    if(r<60) ins.push({icon:'🔴',text:'<strong>'+p+'</strong> has a <strong>'+r+'% approval rate</strong> in your cases. Review documentation requirements for this payer.',meta:c.length+' cases logged'});
-    else if(r>=85) ins.push({icon:'🟢',text:'<strong>'+p+'</strong> shows a strong <strong>'+r+'% approval rate</strong>. Your documentation approach is working well.',meta:c.length+' cases logged'});
+  if(stats.approval_rate!==null&&stats.approval_rate!==undefined){
+    ins.push({icon:stats.approval_rate>=70?'✅':'⚠️',
+      text:'Organization-wide approval rate is <strong>'+stats.approval_rate+'%</strong> ('+stats.approved+' approved, '+stats.denied+' denied).',
+      meta:'Based on '+stats.total_cases+' logged cases'});
+  }
+  if(stats.top_gap_titles&&stats.top_gap_titles.length){
+    ins.push({icon:'🔍',text:'Most common documentation gaps in denied cases: <strong>'+stats.top_gap_titles.join(', ')+'</strong>.',meta:'Aggregated across all denied submissions'});
+  }
+  var byInsurer=stats.by_insurer||{};
+  Object.keys(byInsurer).forEach(function(p){
+    var s=byInsurer[p];
+    if(s.total<3||s.rate===null||s.rate===undefined) return;
+    if(s.rate<60) ins.push({icon:'🔴',text:'<strong>'+p+'</strong> has a <strong>'+s.rate+'% approval rate</strong>. Review documentation requirements for this payer.',meta:s.total+' cases logged'});
+    else if(s.rate>=85) ins.push({icon:'🟢',text:'<strong>'+p+'</strong> shows a strong <strong>'+s.rate+'% approval rate</strong>.',meta:s.total+' cases logged'});
   });
   if(!ins.length) return '<div class="pat-empty"><div class="pat-empty-icon">🔍</div><div class="pat-empty-title">Not enough variation yet.</div><div class="pat-empty-text">Keep logging across different payers and diagnoses.</div></div>';
   return ins.map(function(i){return'<div class="pat-item"><div class="pat-item-icon">'+i.icon+'</div><div><div class="pat-item-text">'+i.text+'</div><div class="pat-item-meta">'+i.meta+'</div></div></div>';}).join('');
@@ -1381,13 +1473,11 @@ async function generateAppeal(){
       dtype=gv('a-denial-type'),dtext=gv('a-denial-text'),
       clinical=gv('a-clinical'),md=gv('a-md'),dFile=gv('fc-denial'),cFile=gv('fc-aclinical');
   var sys='You are a Medicare appeals specialist. Generate a complete formal appeal letter with specific regulatory citations (42 CFR §412.622, LCDs, NCDs), strong clinical arguments, and professional formatting ready for physician review and signature.';
-  var usr='PATIENT:'+pName+'\nPAYER:'+payer+'\nPROCEDURE:'+proc+'\nDENIAL:'+(dtype.replace(/_/g,' '))+'\nPHYSICIAN:'+md+'\n\nDENIAL LETTER:\n'+dtext+'\n'+(dFile||'')+'\n\nCLINICAL DOCS:\n'+clinical+'\n'+(cFile||'')+'\n\nWrite formal appeal: date/address block, RE line, formal greeting, appeal statement, clinical arguments with 42 CFR §412.622 citations, conclusion requesting redetermination, signature block.';
   try{
-    var res=await fetch('/api/generate',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,stream:true,system:sys,messages:[{role:'user',content:usr}]})
-    });
-    if(!res.ok) throw new Error('api_'+res.status);
+    var payerInsight=await getPayerInsightText(payer);
+    if(payerInsight) sys+='\n\n'+payerInsight+'\n\nUse this history to proactively strengthen the clinical arguments in areas that have caused denials for this payer before.';
+    var usr='PATIENT:'+pName+'\nPAYER:'+payer+'\nPROCEDURE:'+proc+'\nDENIAL:'+(dtype.replace(/_/g,' '))+'\nPHYSICIAN:'+md+'\n\nDENIAL LETTER:\n'+dtext+'\n'+(dFile||'')+'\n\nCLINICAL DOCS:\n'+clinical+'\n'+(cFile||'')+'\n\nWrite formal appeal: date/address block, RE line, formal greeting, appeal statement, clinical arguments with 42 CFR §412.622 citations, conclusion requesting redetermination, signature block.';
+    var res=await authedFetch({action:'appeal_generate',model:'claude-sonnet-4-6',max_tokens:2500,stream:true,system:sys,messages:[{role:'user',content:usr}]});
     var reader=res.body.getReader(),dec=new TextDecoder(),full='';
     while(true){
       var chunk=await reader.read(); if(chunk.done) break;
@@ -1401,29 +1491,13 @@ async function generateAppeal(){
       }
     }
     sb.classList.remove('on');
-    if(!full) throw new Error('empty');
+    if(!full) throw {code:'empty_response',message:'The AI returned an empty appeal letter. Please try again.'};
     toast('Appeal drafted — review before sending');
   } catch(err){
     sb.classList.remove('on');
-    out.textContent=demoAppeal({pName:pName,payer:payer,proc:proc,dtype:dtype,md:md});
-    toast('Demo mode — add API key for AI-generated appeals','ℹ️');
+    console.error('Appeal generation error:', err);
+    showGenerationError('appeal-out', err);
   } finally{btn.disabled=false;btn.textContent='⚖️ Generate Appeal Letter';}
-}
-
-/* ── DEMO CONTENT ── */
-function demoNote(d){
-  var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  var note='INPATIENT REHABILITATION FACILITY — ADMISSION NOTE\nClearPath Health | '+d.insurer+'\n\nDATE OF ADMISSION: '+(d.admit||today)+'\nPATIENT: '+(d.name||'[Not found in documents]')+'\nDATE OF BIRTH: '+(d.dob||'[Not found]')+'\nMEDICARE ID: '+(d.mbi||'[Not found]')+'\nATTENDING PHYSICIAN: '+(d.md||'[Not found in documents]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPREADMISSION SCREENING [42 CFR §412.622(a)(4)(i)]\n\nPrior Level of Function: '+(d.plof||'[Not documented in provided notes]')+'\n\nExpected Level of Improvement: Patient is expected to achieve modified independence with functional mobility and basic ADLs within the estimated '+(d.los||'14-21 day')+' rehabilitation stay.\n\nComorbidities: '+(d.comorbid||'[Not found in documents]')+'\n\nAnticipated Discharge: '+(d.discharge||'[Not specified]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nDIAGNOSES\n\nPrimary: '+(d.dx||'[Not extracted — required]')+' | ICD-10: '+(d.icd||'[Not found]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nNURSING ASSESSMENT\n\n'+(d.nurseDoc&&d.nurseDoc.trim().length>20&&!d.nurseDoc.startsWith('[Attached:')?'[Nursing assessment synthesized from provided documentation]':'[No nursing documentation provided]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPHYSICAL THERAPY EVALUATION SUMMARY\n\n'+(d.ptDoc&&d.ptDoc.trim().length>20&&!d.ptDoc.startsWith('[Attached:')?'[PT evaluation synthesized from provided documentation]':'[No PT evaluation provided]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nOCCUPATIONAL THERAPY EVALUATION SUMMARY\n\n'+(d.otDoc&&d.otDoc.trim().length>20&&!d.otDoc.startsWith('[Attached:')?'[OT evaluation synthesized from provided documentation]':'[No OT evaluation provided]')+'\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nSLP EVALUATION\n\nNot clinically indicated based on available documentation.\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nMEDICAL NECESSITY — IRF LEVEL OF CARE [42 CFR §412.622(a)(3)]\n\n'+(d.mdDoc&&d.mdDoc.trim().length>20&&!d.mdDoc.startsWith('[Attached:')?'[Medical necessity synthesized from physician documentation]':'[Physician documentation required]')+'\n\nThe patient has demonstrated the ability to tolerate and actively participate in an intensive rehabilitation therapy program of at least 3 hours per day, 5 days per week.\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPLAN OF CARE [42 CFR §412.622(a)(4)(ii)]\n\nTherapy Disciplines: Physical Therapy, Occupational Therapy\nIntensity: 3+ hours/day, 5 days/week (minimum 15 hrs/week)\nEst. Duration: '+(d.los||'[to be determined]')+'\n\nWeekly IDT meetings per 42 CFR §412.622(a)(5).\n\n'+String.fromCharCode(9473).repeat(25)+'\n\nPHYSICIAN CERTIFICATION\n\nI certify this patient meets all medical necessity criteria under 42 CFR §412.622(a)(3)(4)(5).\n\n'+(d.md||'[Attending Physician — signature required]')+'\nSignature: _________________________ Date: ___________\n\n━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ DEMO MODE — Paste text into sections or add API key for live AI generation';
-  var flags=[
-    {severity:'critical',phrase:'3 hours per day',title:'Therapy Tolerance — Evidence Required',detail:'Asserting tolerance without specific observed evidence is insufficient. WISeR requires documented proof from the preadmission evaluation.',suggestion:'Add: "During preadmission evaluation on [date], patient participated in [X] minutes of combined PT/OT activity demonstrating adequate endurance."',citation:'42 CFR §412.622(a)(3)'},
-    {severity:'critical',phrase:'modified independence with functional mobility',title:'Functional Goals Lack Specificity',detail:'Goals without measurable benchmarks and timeframes are flagged by WISeR. FIM score targets are strongly preferred.',suggestion:'Specify: "Progress from FIM locomotion score of [X] to [Y] within 14 days; modified independence for dressing within 10 days."',citation:'42 CFR §412.622(a)(3)'},
-    {severity:'warning',phrase:'IDT meetings per 42 CFR',title:'IDT Team Composition Not Named',detail:'Listing specific team member names and roles strengthens documentation over a general statement.',suggestion:'Add: "IDT attendees: [Dr. Name] (lead), [RN] (nursing), [SW] (social work), [PT name], [OT name]. Minutes maintained in patient record."',citation:'42 CFR §412.622(a)(5)'}
-  ];
-  return{note:note,flags:flags};
-}
-function demoAppeal(d){
-  var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  return today+'\n\nMedicare Appeals Review Unit\nCMS / Medicare Administrative Contractor\n\nRE: NOTICE OF APPEAL — Request for Redetermination\nPatient: '+(d.pName||'[Patient Name]')+'\nClaim: '+(d.proc||'[Procedure]')+'\nDenial Reason: '+((d.dtype||'').replace(/_/g,' '))+'\n\nDear Medicare Review Officer,\n\nThis letter constitutes a formal request for redetermination pursuant to 42 CFR §405.940. We respectfully appeal the denial of '+(d.proc||'the above-referenced claim')+'.\n\nI. CLINICAL JUSTIFICATION\n\n[PHYSICIAN TO COMPLETE — insert specific clinical findings and medical necessity evidence.]\n\nThis patient satisfies IRF medical necessity under 42 CFR §412.622(a)(3) because:\n\n1. Multiple therapy disciplines actively required — PT and OT at minimum.\n2. Patient demonstrated capacity to tolerate 3+ hours/day of intensive rehabilitation.\n3. Medical complexity requires rehabilitation physician supervision per 42 CFR §412.622(a)(5).\n4. Measurable functional improvement is reasonably expected.\n\nII. REGULATORY BASIS\n\nCoverage is mandated under 42 CFR §412.622(a)(3)(4)(5) and Section 1862(a)(1)(A) of the Social Security Act.\n\nIII. CONCLUSION\n\nWe respectfully request reversal of the denial. All supporting documentation is enclosed.\n\n'+(d.md||'[Physician Name, MD — PM&R]')+'\n[Practice Name] | [Phone] | NPI: [NPI]\n\nEnclosures: Admission note, PT/OT/SLP evaluations, nursing assessment, PAS documentation\n\n━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ DEMO MODE — Add API key for fully AI-drafted appeals';
 }
 
 /* ════════════════════════════════════════════════
@@ -1562,16 +1636,6 @@ async function doSignOut(){
   currentUser = null;
   document.getElementById('user-pill').style.display='none';
   showAuthOverlay();
-}
-
-/* ── AUDIT LOG HELPER — wraps saveLog to include user ── */
-function saveOutcomeWithAudit(entry){
-  if(currentUser){
-    entry.user_email = currentUser.email;
-    entry.user_id    = currentUser.id;
-    entry.user_name  = (currentUser.user_metadata && currentUser.user_metadata.full_name) || currentUser.email;
-  }
-  return entry;
 }
 
 /* ── INIT ── */
