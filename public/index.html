@@ -4,34 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ClearPath Health</title>
-<!-- Supabase JS SDK -->
+<!-- Generic CDN loader w/ fallback — used for Supabase, Tesseract (OCR) -->
 <script>
-window.__supabaseLibReady=false;
-window.__supabaseLibWaiters=[];
-window.whenSupabaseLibReady=function(cb){
-  if(window.__supabaseLibReady) cb(); else window.__supabaseLibWaiters.push(cb);
-};
-(function(){
-  var cdns=[
-    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js',
-    'https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js'
-  ];
-  var i=0;
-  function done(){
-    window.__supabaseLibReady=true;
-    window.__supabaseLibWaiters.forEach(function(fn){fn();});
-    window.__supabaseLibWaiters=[];
-  }
-  function tryNext(){
-    if(i>=cdns.length){ console.error('All Supabase CDNs failed to load'); done(); return; }
-    var s=document.createElement('script');
-    s.src=cdns[i++];
-    s.onload=function(){ console.log('Supabase loaded from',s.src); done(); };
-    s.onerror=function(){ console.warn('CDN failed, trying next'); tryNext(); };
-    document.head.appendChild(s);
-  }
-  tryNext();
-})();
+function makeLibLoader(label){
+  var ready=false, waiters=[];
+  function done(){ ready=true; waiters.forEach(function(fn){fn();}); waiters=[]; }
+  return {
+    when:function(cb){ if(ready) cb(); else waiters.push(cb); },
+    load:function(cdns){
+      var i=0;
+      function tryNext(){
+        if(i>=cdns.length){ console.error('All CDNs failed to load: '+label); done(); return; }
+        var s=document.createElement('script');
+        s.src=cdns[i++];
+        s.onload=function(){ console.log(label+' loaded from',s.src); done(); };
+        s.onerror=function(){ console.warn(label+' CDN failed, trying next'); tryNext(); };
+        document.head.appendChild(s);
+      }
+      tryNext();
+    }
+  };
+}
+window.__supabaseLoader=makeLibLoader('Supabase');
+window.whenSupabaseLibReady=window.__supabaseLoader.when;
+window.__supabaseLoader.load([
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js',
+  'https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js'
+]);
+
+window.__tesseractLoader=makeLibLoader('Tesseract');
+window.whenTesseractLibReady=window.__tesseractLoader.when;
+window.__tesseractLoader.load([
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+  'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
+]);
 </script>
 <!-- PDF.js (client-side PDF text extraction — no AI, no server) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -880,14 +886,56 @@ function combineDoc(fileId,pasteId){
 /* ── FILE UPLOAD (multi-file, drag & drop, client-side PDF text extraction) ── */
 var zoneFiles={}; // contentId -> [{name, text}]
 
-async function extractPdfText(file){
+/* ── OCR FALLBACK (for scanned/image-only PDF pages, via Tesseract.js) ── */
+var ocrWorker=null;
+var OCR_MAX_PAGES=30;
+
+async function getOcrWorker(){
+  if(ocrWorker) return ocrWorker;
+  await new Promise(function(resolve){ window.whenTesseractLibReady(resolve); });
+  if(!window.Tesseract) throw new Error('OCR library failed to load');
+  ocrWorker=await Tesseract.createWorker('eng');
+  return ocrWorker;
+}
+
+async function ocrPage(page){
+  var viewport=page.getViewport({scale:2.5});
+  var canvas=document.createElement('canvas');
+  canvas.width=viewport.width; canvas.height=viewport.height;
+  var ctx=canvas.getContext('2d');
+  await page.render({canvasContext:ctx,viewport:viewport}).promise;
+  var worker=await getOcrWorker();
+  var result=await worker.recognize(canvas);
+  return ((result.data&&result.data.text)||'').trim();
+}
+
+async function extractPdfText(file,onProgress){
   var buf=await file.arrayBuffer();
   var pdf=await pdfjsLib.getDocument({data:buf}).promise;
   var text='';
+  var ocrPageCount=0;
   for(var i=1;i<=pdf.numPages;i++){
     var page=await pdf.getPage(i);
     var content=await page.getTextContent();
-    text+=content.items.map(function(it){return it.str;}).join(' ')+'\n';
+    var pageText=content.items.map(function(it){return it.str;}).join(' ').trim();
+    if(pageText.length<20){
+      // No (or almost no) text layer — likely a scanned image page, fall back to OCR
+      if(ocrPageCount>=OCR_MAX_PAGES){
+        text+='[Page '+i+': skipped OCR — exceeded '+OCR_MAX_PAGES+'-page OCR limit for this file]\n';
+      } else {
+        ocrPageCount++;
+        if(onProgress) onProgress('Page '+i+' of '+pdf.numPages+' looks scanned — running OCR...');
+        try{
+          var ocrText=await ocrPage(page);
+          text+=(ocrText||'[Page '+i+': OCR found no readable text]')+'\n';
+        } catch(err){
+          console.error('OCR failed for page '+i,err);
+          text+='[Page '+i+': OCR failed — '+err.message+']\n';
+        }
+      }
+    } else {
+      text+=pageText+'\n';
+    }
   }
   return text.trim();
 }
@@ -930,8 +978,8 @@ async function processFiles(files,contentId,nameId,zoneId,badgeId){
       var text='';
       if(isPdf){
         toast('Extracting text from '+file.name+'...');
-        text=await extractPdfText(file);
-        if(!text) toast(file.name+' has no extractable text (scanned image?)','⚠️');
+        text=await extractPdfText(file,function(msg){ toast(msg); });
+        if(!text) toast(file.name+': no readable text found, even after OCR','⚠️');
       } else if(isTxt){
         text=await file.text();
       } else {
